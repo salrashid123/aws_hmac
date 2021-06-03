@@ -28,8 +28,8 @@ import (
 
 	"flag"
 
-	hmacsigner "github.com/salrashid123/hmacsigner"
-	hmaccred "github.com/salrashid123/hmacsigner/credentials"
+	hmacsigner "github.com/salrashid123/aws_hmac/aws"
+	hmaccred "github.com/salrashid123/aws_hmac/aws/credentials"
 )
 
 const (

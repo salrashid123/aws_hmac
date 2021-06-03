@@ -18,8 +18,8 @@ import (
 
 	"github.com/aws/smithy-go/encoding/httpbinding"
 	"github.com/aws/smithy-go/logging"
-	hmaccred "github.com/salrashid123/hmacsigner/credentials"
-	v4Internal "github.com/salrashid123/hmacsigner/internal"
+	hmaccred "github.com/salrashid123/aws_hmac/aws/credentials"
+	v4Internal "github.com/salrashid123/aws_hmac/aws/internal"
 )
 
 const (
