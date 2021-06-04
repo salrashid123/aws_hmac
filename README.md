@@ -159,8 +159,8 @@ import (
 	"github.com/google/tink/go/core/registry"
 	"github.com/google/tink/go/integration/gcpkms"
 
-	hmacsigner "github.com/salrashid123/hmacsigner"
-	hmaccred "github.com/salrashid123/hmacsigner/credentials"
+	hmacsigner "github.com/salrashid123/aws_hmac/aws"
+	hmaccred "github.com/salrashid123/aws_hmac/aws/credentials"
 )
 
 	// register the backend KMS, in this case its GCP
