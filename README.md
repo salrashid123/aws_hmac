@@ -107,7 +107,7 @@ Now create an EncryptedKeySet with Tink, then read in that KeySet and make Tink 
 export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKERNFQLHJ
 export AWS_SECRET_ACCESS_KEY=YRJ86SK5qTOZQzZTI1u-redacted
 
-$ go run main.go --mode=tink \ \
+$ go run main.go --mode=tink \
   --keyURI "projects/$PROJECT_ID/locations/$LOCATION/keyRings/mykeyring/cryptoKeys/key1" \
   --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
   -secretAccessKey $AWS_SECRET_ACCESS_KEY
@@ -232,7 +232,7 @@ rm -rf /tmp/tokens
 mkdir /tmp/tokens
 pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so --slot-index=0 --init-token --label="token1" --so-pin="123456"
 pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  --label="token1" --init-pin --so-pin "123456" --pin mynewpin
-pcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  --list-objects --pin mynewpin
+pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  --list-objects --pin mynewpin
 ```
 
 At this point, we are ready to run the sample application which will

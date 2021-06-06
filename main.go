@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/tink/go/keyset"
 	"github.com/google/tink/go/mac/subtle"
@@ -52,8 +54,8 @@ const (
 var (
 	keyURI          = flag.String("keyURI", "projects/mineral-minutia-820/locations/us-central1/keyRings/mykeyring/cryptoKeys/key1", "KMS Key Uri")
 	hsmLibrary      = flag.String("hsmLibrary", "/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so", "HSM  Library to load")
-	accessKeyID     = flag.String("accessKeyID", "AKIAUH3H6EGKERNFQLHJ", "AWS AccessKeyID")
-	secretAccessKey = flag.String("secretAccessKey", "YRJ86SK5qTOZQzZTI1u-redacted", "AWS SecretAccessKey")
+	accessKeyID     = flag.String("accessKeyID", "", "AWS AccessKeyID")
+	secretAccessKey = flag.String("secretAccessKey", "", "AWS SecretAccessKey")
 
 	awsRegion = flag.String("awsRegion", "us-east-2", "AWS Region")
 	mode      = flag.String("mode", "pkcs", "What to test: pkcs|tink")
@@ -71,34 +73,34 @@ func main() {
 
 	// // // **************  STS
 
-	// log.Println("Using  Standard AWS v4Signer")
-	// creds := credentials.NewStaticCredentials(*accessKeyID, *secretAccessKey, "")
-	// rbody := strings.NewReader("")
-	// signer := v4.NewSigner(creds)
-	// req, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", rbody)
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-	// _, err = signer.Sign(req, rbody, "sts", "us-east-1", time.Now())
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-	// res, err := http.DefaultClient.Do(req)
-	// if err != nil {
-	// 	log.Fatalf("failed to call remote service: (%v)\n", err)
-	// }
+	log.Println("Using  Standard AWS v4Signer")
+	creds := credentials.NewStaticCredentials(*accessKeyID, *secretAccessKey, "")
+	rbody := strings.NewReader("")
+	signer := v4.NewSigner(creds)
+	req, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", rbody)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	_, err = signer.Sign(req, rbody, "sts", "us-east-1", time.Now())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Fatalf("failed to call remote service: (%v)\n", err)
+	}
 
-	// defer res.Body.Close()
-	// if res.StatusCode != 200 {
-	// 	fmt.Printf("service returned a status not 200: (%d)\n", res.StatusCode)
-	// 	//return
-	// }
-	// b, err := ioutil.ReadAll(res.Body)
-	// if err != nil {
-	// 	log.Println(err)
-	// }
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		fmt.Printf("service returned a status not 200: (%d)\n", res.StatusCode)
+		//return
+	}
+	b, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Println(err)
+	}
 
-	// log.Printf("   Response using AWS STS NewStaticCredentials and Standard v4.Singer \n%s", string(b))
+	log.Printf("   Response using AWS STS NewStaticCredentials and Standard v4.Singer \n%s", string(b))
 
 	// ***************************************************************************
 
