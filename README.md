@@ -1,13 +1,14 @@
 ## AWS v4 Signer for embedding Access Secrets to PKCS11 and TPMs.  Encrypted AWS keys with Google TINK library,
 
-Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11).
+Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11) and a [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module)
 
 AWS secret key and ID can be thought of as a username/password and should be carefully managed, rotated, secured as described in [Best practices for managing AWS access keys](https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html).   However, if you need to invoke AWS from remote systems which do not provide ambient federation (eg on [GCP using OIDC tokens](https://github.com/salrashid123/awscompat)), then you must either utilize an AWS credentials file or set them dynamically as an environment variable.  
 
-This repo provides two ways to protect the aws secret:
+This repo provides three ways to protect the aws secret:
 
 1. Wrap the secret using KMS and access it via TINK.
 2. Embed the secret into an HSM an access it via PKCS11
+3. Embed the secret into an TM an access it via go-tpm
 
 
 >> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
