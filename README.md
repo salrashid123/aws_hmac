@@ -1,4 +1,4 @@
-## AWS v4 Signer With TINK Encryption and HSM embedded AWS Secret Access Key
+## AWS v4 Signer for embedded Access Key to PKCS and TPM  .  Encrypted AWS keys with Google TINK library,
 
 Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11).
 
@@ -237,7 +237,7 @@ pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  --list-ob
 
 At this point, we are ready to run the sample application which will
 
-1. COnnect to the HSM
+1. Connect to the HSM
 2. Embed the AccessKey into the HSM
 3. Use the embedded HMAC key to create AWS V4 signature
 4. Access AWS API
@@ -314,6 +314,117 @@ The this code does is the magic:
 	sb, err := ioutil.ReadAll(sres.Body)
 ```
 
+
+### TPM
+
+In this variation, you will embed the AWS HMAC key into a Trusted Platform Module (TPM).  One embedded, the key will never leave the device can only be accessed to "sign" similar to the PKCS example above.  To note, the TPM itself has a PKCS interface but at the moment, it does not support  HMAC operations like import.  See [Issue #688](https://github.com/tpm2-software/tpm2-pkcs11/issues/688).  On the other end, go-tpm does not support pretty much any hmac operations: [Issue 249](https://github.com/google/go-tpm/issues/249)
+
+
+Usage:
+
+-  Create a VM with a vTPM anywhere...eg, on GCP  [https://github.com/salrashid123/tpm2#usage](https://github.com/salrashid123/tpm2#usage)
+
+One you installed go, just git clone this repo, export the env-vars and run
+
+```bash
+go run main.go -mode=tpm \
+    --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
+	-secretAccessKey $AWS_SECRET_ACCESS_KEY
+```
+
+What the script above does is 
+
+1. opens tpm
+2. creates a primary tpm contxet
+3. creates a tpm public and private sections for HMAC
+4. set the 'sensitive' part of the private key to the raw AWS secret
+5. imports the public private key to the tpm
+6. writes the _handle_ to that hmac object to a file or to a persistent handle.
+7. initialize the `hmaccredentials` object in this repo
+8. Use just the file handle and aws KeyID to access an AWS API.
+
+Note, this example does an import of a key every time...you can ofcorse stop after step 6 and just run step 7,8 separately.
+
+this bit bootstraps the tpm and the file handle:
+
+```golang
+		// pHandle := tpmutil.Handle(0x81010002)
+		// err = tpm2.EvictControl(rwc, emptyPassword, tpm2.HandleOwner, newHandle, pHandle)
+		// if err != nil {
+		// 	fmt.Fprintf(os.Stderr,"Error  persisting hash key  %v\n", err)
+		// 	os.Exit(1)
+		// }
+		// defer tpm2.FlushContext(rwc, pHandle)
+
+		cc, err = hmaccred.NewHMACCredential(&hmaccred.HMACCredentialConfig{
+			TPMConfig: hmaccred.TPMConfig{
+				TpmDevice:     *tpmPath,
+				TpmHandleFile: *hmacKeyHandle,
+				//TpmHandle: 0x81010002,
+			},
+			AccessKeyID: *accessKeyID,
+		})
+```
+
+```log
+# go run main.go -mode=tpm     --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID -secretAccessKey $AWS_SECRET_ACCESS_KEY
+		2021/06/10 13:55:51 Using  Standard AWS v4Signer
+		2021/06/10 13:55:52    Response using AWS STS NewStaticCredentials and Standard v4.Singer 
+		<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+		<GetCallerIdentityResult>
+			<Arn>arn:aws:iam::291738886548:user/svcacct1</Arn>
+			<UserId>AIDAUH3H6EGKDO36JYJH3</UserId>
+			<Account>291738886548</Account>
+		</GetCallerIdentityResult>
+		<ResponseMetadata>
+			<RequestId>8bab0855-1536-4689-854a-10fe2fdd9500</RequestId>
+		</ResponseMetadata>
+		</GetCallerIdentityResponse>
+		Handle 0x80000000 flushed
+		======= ContextSave (newHandle) ========
+		2021/06/10 13:55:52     Signed RequestURI: 
+		2021/06/10 13:55:52     STS Response:  
+		<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+		<GetCallerIdentityResult>
+			<Arn>arn:aws:iam::291738886548:user/svcacct1</Arn>
+			<UserId>AIDAUH3H6EGKDO36JYJH3</UserId>
+			<Account>291738886548</Account>
+		</GetCallerIdentityResult>
+		<ResponseMetadata>
+			<RequestId>fe67e9dd-1d58-4ace-9678-3021fd6e90eb</RequestId>
+		</ResponseMetadata>
+		</GetCallerIdentityResponse>
+```
+
+Now some notes about the implementation:
+
+* i do not think i've imported the HMAC correctly with go-tpm.   you can read more details why i dont' think its right here [https://github.com/salrashid123/tpm2/tree/master/hmac_import#notes](https://github.com/salrashid123/tpm2/tree/master/hmac_import#notes).
+
+eg, look at the attributes:
+
+```bash
+# tpm2_readpublic -c 0x81010002
+name: 000b754eed8a76fdca5f1a23a96866756bc0bf26f59a9a0e448dd9f6a51df1da77f2
+qualified name: 000b43abb3d2468bdd900682d3ab9eab29a61e2dd5415243c1eab63c5c55aecaaca4
+name-alg:
+  value: sha256
+  raw: 0xb
+attributes:
+  value: sensitivedataorigin|userwithauth|sign
+  raw: 0x40060
+type:
+  value: keyedhash
+  raw: 0x8
+algorithm: 
+  value: hmac
+  raw: 0x5
+hash-alg:
+  value: sha256
+  raw: 0xb
+keyedhash: 25ba9e58026a36c757b2bf67fdb8c4f16982ce92e493220a1f7b02d8c9f2dc1f
+```
+
+Anyway this is a POC on using TPM embedded AWS keys. 
 ---
 
 ### Conclusion

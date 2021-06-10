@@ -3,15 +3,20 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
+
+	cr "crypto/rand"
+	"os"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
@@ -32,6 +37,10 @@ import (
 
 	hmacsigner "github.com/salrashid123/aws_hmac/aws"
 	hmaccred "github.com/salrashid123/aws_hmac/aws/credentials"
+
+	"github.com/google/go-tpm-tools/client"
+	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/tpmutil"
 )
 
 const (
@@ -49,6 +58,9 @@ const (
 	awsDateHeader          = "x-amz-date"
 	awsTimeFormatLong      = "20060102T150405Z"
 	awsTimeFormatShort     = "20060102"
+
+	emptyPassword                 = ""
+	CmdHmacStart  tpmutil.Command = 0x0000015B
 )
 
 var (
@@ -58,8 +70,36 @@ var (
 	secretAccessKey = flag.String("secretAccessKey", "", "AWS SecretAccessKey")
 
 	awsRegion = flag.String("awsRegion", "us-east-2", "AWS Region")
-	mode      = flag.String("mode", "pkcs", "What to test: pkcs|tink")
+	mode      = flag.String("mode", "pkcs", "What to test: pkcs|tink|tpm")
 	a         tink.MAC
+
+	tpmPath       = flag.String("tpm-path", "/dev/tpm0", "Path to the TPM device (character device or a Unix socket).")
+	primaryHandle = flag.String("primaryHandle", "primary.bin", "Handle to the primary")
+	hmacKeyHandle = flag.String("hmacKeyHandle", "hmac.bin", "Handle to the primary")
+	flush         = flag.String("flush", "all", "Data to HMAC")
+
+	handleNames = map[string][]tpm2.HandleType{
+		"all":       []tpm2.HandleType{tpm2.HandleTypeLoadedSession, tpm2.HandleTypeSavedSession, tpm2.HandleTypeTransient},
+		"loaded":    []tpm2.HandleType{tpm2.HandleTypeLoadedSession},
+		"saved":     []tpm2.HandleType{tpm2.HandleTypeSavedSession},
+		"transient": []tpm2.HandleType{tpm2.HandleTypeTransient},
+	}
+
+	defaultKeyParams = tpm2.Public{
+		Type:    tpm2.AlgRSA,
+		NameAlg: tpm2.AlgSHA256,
+		Attributes: tpm2.FlagDecrypt | tpm2.FlagRestricted | tpm2.FlagFixedTPM |
+			tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth,
+		AuthPolicy: []byte{},
+		RSAParameters: &tpm2.RSAParams{
+			Symmetric: &tpm2.SymScheme{
+				Alg:     tpm2.AlgAES,
+				KeyBits: 128,
+				Mode:    tpm2.AlgCFB,
+			},
+			KeyBits: 2048,
+		},
+	}
 )
 
 func main() {
@@ -316,6 +356,167 @@ func main() {
 				Label:   "HMACKey",
 				PIN:     "mynewpin",
 				Id:      id,
+			},
+			AccessKeyID: *accessKeyID,
+		})
+		if err != nil {
+			log.Fatalln(err)
+		}
+	} else if *mode == "tpm" {
+
+		rwc, err := tpm2.OpenTPM(*tpmPath)
+		if err != nil {
+
+			fmt.Fprintf(os.Stderr, "Can't open TPM %s: %v", *tpmPath, err)
+			os.Exit(1)
+		}
+		defer func() {
+			if err := rwc.Close(); err != nil {
+				if strings.Contains(err.Error(), "file already closed") {
+					os.Exit(0)
+				}
+				fmt.Fprintf(os.Stderr, "Can't close TPM (may already be closed earlier) %s: %v", *tpmPath, err)
+				os.Exit(1)
+			}
+		}()
+
+		totalHandles := 0
+		for _, handleType := range handleNames[*flush] {
+			handles, err := client.Handles(rwc, handleType)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error getting handles", *tpmPath, err)
+				os.Exit(1)
+			}
+			for _, handle := range handles {
+				if err = tpm2.FlushContext(rwc, handle); err != nil {
+					fmt.Fprintf(os.Stderr, "Error flushing handle 0x%x: %v\n", handle, err)
+					os.Exit(1)
+				}
+				fmt.Printf("Handle 0x%x flushed\n", handle)
+				totalHandles++
+			}
+		}
+
+		pcrList := []int{}
+		pcrSelection := tpm2.PCRSelection{Hash: tpm2.AlgSHA256, PCRs: pcrList}
+
+		pkh, _, err := tpm2.CreatePrimary(rwc, tpm2.HandleOwner, pcrSelection, emptyPassword, emptyPassword, defaultKeyParams)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating Primary %v\n", err)
+			os.Exit(1)
+		}
+		defer tpm2.FlushContext(rwc, pkh)
+
+		pkhBytes, err := tpm2.ContextSave(rwc, pkh)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ContextSave failed for pkh %v\n", err)
+			os.Exit(1)
+		}
+
+		// err = tpm2.FlushContext(rwc, pkh)
+		// if err != nil {
+		// 	fmt.Fprintf(os.Stderr, "ContextSave failed for pkh%v\n", err)
+		// 	os.Exit(1)
+		// }
+		err = ioutil.WriteFile(*primaryHandle, pkhBytes, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ContextSave failed for pkh%v\n", err)
+			os.Exit(1)
+		}
+
+		private := tpm2.Private{
+			Type:      tpm2.AlgKeyedHash,
+			AuthValue: nil,
+			SeedValue: make([]byte, 32),
+			Sensitive: []byte("AWS4" + *secretAccessKey),
+		}
+		io.ReadFull(cr.Reader, private.SeedValue)
+
+		privArea, err := private.Encode()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error  encoding  private  %v\n", err)
+			os.Exit(1)
+		}
+
+		duplicate, err := tpmutil.Pack(tpmutil.U16Bytes(privArea))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error  encoding  dulicate  %v\n", err)
+			os.Exit(1)
+		}
+
+		privHash := crypto.SHA256.New()
+		privHash.Write(private.SeedValue)
+		privHash.Write(private.Sensitive)
+		public := tpm2.Public{
+			Type:    tpm2.AlgKeyedHash,
+			NameAlg: tpm2.AlgSHA256,
+			// the object really should have the following attributes but i coudn't get this to work, the error was "parameter 2, error code 0x2 : inconsistent attributes"
+			//Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth | tpm2.FlagSign,
+			Attributes: tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth | tpm2.FlagSign,
+			KeyedHashParameters: &tpm2.KeyedHashParams{
+				Alg:    tpm2.AlgHMAC,
+				Hash:   tpm2.AlgSHA256,
+				Unique: privHash.Sum(nil),
+			},
+		}
+		pubArea, err := public.Encode()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error  encoding  public  %v\n", err)
+			os.Exit(1)
+		}
+
+		emptyAuth := tpm2.AuthCommand{Session: tpm2.HandlePasswordSession, Attributes: tpm2.AttrContinueSession}
+		privInternal, err := tpm2.Import(rwc, pkh, emptyAuth, pubArea, duplicate, nil, nil, nil)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error Importing hash key  %v\n", err)
+			os.Exit(1)
+		}
+
+		newHandle, _, err := tpm2.Load(rwc, pkh, emptyPassword, pubArea, privInternal)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error  loading hash key %v\n", err)
+			os.Exit(1)
+		}
+		defer tpm2.FlushContext(rwc, newHandle)
+
+		// pHandle := tpmutil.Handle(0x81010002)
+		// err = tpm2.EvictControl(rwc, emptyPassword, tpm2.HandleOwner, newHandle, pHandle)
+		// if err != nil {
+		// 	fmt.Fprintf(os.Stderr,"Error  persisting hash key  %v\n", err)
+		// 	os.Exit(1)
+		// }
+		// defer tpm2.FlushContext(rwc, pHandle)
+
+		fmt.Printf("======= ContextSave (newHandle) ========\n")
+		ekhBytes, err := tpm2.ContextSave(rwc, newHandle)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ContextSave failed for ekh %v\n", err)
+			os.Exit(1)
+		}
+		err = ioutil.WriteFile(*hmacKeyHandle, ekhBytes, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ContextSave failed for ekh%v\n", err)
+			os.Exit(1)
+		}
+		err = tpm2.FlushContext(rwc, newHandle)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error  flush hash key  %v\n", err)
+			os.Exit(1)
+		}
+
+		err = rwc.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error  Closing TPM %v\n", err)
+			os.Exit(1)
+		}
+
+		/// **** Done loading, now use the embedded key
+
+		cc, err = hmaccred.NewHMACCredential(&hmaccred.HMACCredentialConfig{
+			TPMConfig: hmaccred.TPMConfig{
+				TpmDevice:     *tpmPath,
+				TpmHandleFile: *hmacKeyHandle,
+				//TpmHandle: 0x81010002,
 			},
 			AccessKeyID: *accessKeyID,
 		})
