@@ -1,4 +1,4 @@
-## AWS v4 Signer for embedded Access Key to PKCS and TPM  .  Encrypted AWS keys with Google TINK library,
+## AWS v4 Signer for embedding Access Secrets to PKCS11 and TPMs.  Encrypted AWS keys with Google TINK library,
 
 Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11).
 
@@ -425,6 +425,7 @@ keyedhash: 25ba9e58026a36c757b2bf67fdb8c4f16982ce92e493220a1f7b02d8c9f2dc1f
 ```
 
 Anyway this is a POC on using TPM embedded AWS keys. 
+
 ---
 
 ### Conclusion
