@@ -3,11 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -15,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	cr "crypto/rand"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -59,8 +56,9 @@ const (
 	awsTimeFormatLong      = "20060102T150405Z"
 	awsTimeFormatShort     = "20060102"
 
-	emptyPassword                 = ""
-	CmdHmacStart  tpmutil.Command = 0x0000015B
+	emptyPassword                   = ""
+	defaultPassword                 = ""
+	CmdHmacStart    tpmutil.Command = 0x0000015B
 )
 
 var (
@@ -90,7 +88,7 @@ var (
 		NameAlg: tpm2.AlgSHA256,
 		Attributes: tpm2.FlagDecrypt | tpm2.FlagRestricted | tpm2.FlagFixedTPM |
 			tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth,
-		AuthPolicy: []byte{},
+		AuthPolicy: []byte(defaultPassword),
 		RSAParameters: &tpm2.RSAParams{
 			Symmetric: &tpm2.SymScheme{
 				Alg:     tpm2.AlgAES,
@@ -424,51 +422,21 @@ func main() {
 			os.Exit(1)
 		}
 
-		private := tpm2.Private{
-			Type:      tpm2.AlgKeyedHash,
-			AuthValue: nil,
-			SeedValue: make([]byte, 32),
-			Sensitive: []byte("AWS4" + *secretAccessKey),
-		}
-		io.ReadFull(cr.Reader, private.SeedValue)
-
-		privArea, err := private.Encode()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error  encoding  private  %v\n", err)
-			os.Exit(1)
-		}
-
-		duplicate, err := tpmutil.Pack(tpmutil.U16Bytes(privArea))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error  encoding  dulicate  %v\n", err)
-			os.Exit(1)
-		}
-
-		privHash := crypto.SHA256.New()
-		privHash.Write(private.SeedValue)
-		privHash.Write(private.Sensitive)
 		public := tpm2.Public{
-			Type:    tpm2.AlgKeyedHash,
-			NameAlg: tpm2.AlgSHA256,
-			// the object really should have the following attributes but i coudn't get this to work, the error was "parameter 2, error code 0x2 : inconsistent attributes"
-			//Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth | tpm2.FlagSign,
-			Attributes: tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth | tpm2.FlagSign,
+			Type:       tpm2.AlgKeyedHash,
+			NameAlg:    tpm2.AlgSHA256,
+			AuthPolicy: []byte(defaultPassword),
+			Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagUserWithAuth | tpm2.FlagSign, // | tpm2.FlagSensitiveDataOrigin
 			KeyedHashParameters: &tpm2.KeyedHashParams{
-				Alg:    tpm2.AlgHMAC,
-				Hash:   tpm2.AlgSHA256,
-				Unique: privHash.Sum(nil),
+				Alg:  tpm2.AlgHMAC,
+				Hash: tpm2.AlgSHA256,
 			},
 		}
-		pubArea, err := public.Encode()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error  encoding  public  %v\n", err)
-			os.Exit(1)
-		}
 
-		emptyAuth := tpm2.AuthCommand{Session: tpm2.HandlePasswordSession, Attributes: tpm2.AttrContinueSession}
-		privInternal, err := tpm2.Import(rwc, pkh, emptyAuth, pubArea, duplicate, nil, nil, nil)
+		hmacKeyBytes := []byte("AWS4" + *secretAccessKey)
+		privInternal, pubArea, _, _, _, err := tpm2.CreateKeyWithSensitive(rwc, pkh, pcrSelection, defaultPassword, defaultPassword, public, hmacKeyBytes)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error Importing hash key  %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error  creating Sensitive %v\n", err)
 			os.Exit(1)
 		}
 

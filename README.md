@@ -397,22 +397,19 @@ this bit bootstraps the tpm and the file handle:
 		</GetCallerIdentityResponse>
 ```
 
-Now some notes about the implementation:
-
-* i do not think i've imported the HMAC correctly with go-tpm.   you can read more details why i dont' think its right here [https://github.com/salrashid123/tpm2/tree/master/hmac_import#notes](https://github.com/salrashid123/tpm2/tree/master/hmac_import#notes).
-
-eg, look at the attributes:
+* Note, the key we generate has the following attributes
 
 ```bash
 # tpm2_readpublic -c 0x81010002
-name: 000b754eed8a76fdca5f1a23a96866756bc0bf26f59a9a0e448dd9f6a51df1da77f2
-qualified name: 000b43abb3d2468bdd900682d3ab9eab29a61e2dd5415243c1eab63c5c55aecaaca4
+
+name: 000b8fb81fa736a1cc6aae780f7ff5d32d6efc3b495ce1854af8aac9dc56dec287ee
+qualified name: 000b23eba35005caaacdfa30defedc83a9c4986ed43be8728d544cbb93223d5b8045
 name-alg:
   value: sha256
   raw: 0xb
 attributes:
-  value: sensitivedataorigin|userwithauth|sign
-  raw: 0x40060
+  value: fixedtpm|fixedparent|userwithauth|sign
+  raw: 0x40052
 type:
   value: keyedhash
   raw: 0x8
@@ -422,7 +419,8 @@ algorithm:
 hash-alg:
   value: sha256
   raw: 0xb
-keyedhash: 25ba9e58026a36c757b2bf67fdb8c4f16982ce92e493220a1f7b02d8c9f2dc1f
+keyedhash: 3d2733a76ef6723e5ddb7e1ab88eab0c5e9b2728606756334cc9639570b26cea
+
 ```
 
 Anyway this is a POC on using TPM embedded AWS keys. 
