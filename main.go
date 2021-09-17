@@ -505,6 +505,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	// $ touch empty.txt
+	// $ sha256sum empty.txt
+	//   e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  empty.txt
+
 	payloadHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	hs.SignHTTP(ctx, *cc, sreq, payloadHash, "sts", "us-east-1", time.Now())
 	if err != nil {

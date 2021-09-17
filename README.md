@@ -1,4 +1,4 @@
-## AWS v4 Signer for embedding Access Secrets to PKCS11 and TPMs.  Encrypted AWS keys with Google TINK library,
+## AWS v4 Signer for embedding Access Secrets to PKCS11 and TPMs
 
 Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11) and a [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module)
 
@@ -307,6 +307,9 @@ The this code does is the magic:
 	sreq, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", body)
 
 	// sign the request
+	// $ touch empty.txt
+    // $ sha256sum empty.txt 
+    //   e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  empty.txt	
 	payloadHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	hs.SignHTTP(ctx, *cc, sreq, payloadHash, "sts", "us-east-1", time.Now())
 
