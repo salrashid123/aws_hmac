@@ -1,6 +1,6 @@
-## AWS v4 Signer for embedding Access Secrets to PKCS11 and TPMs
+## AWS v4 Signer for embedding Access Secrets to PKCS11, Vault and Trusted Platform Module (TPM)
 
-Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11) and a [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module)
+Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11), [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module) and [Hashicorp Vault](https://www.vaultproject.io/)
 
 AWS secret key and ID can be thought of as a username/password and should be carefully managed, rotated, secured as described in [Best practices for managing AWS access keys](https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html).   However, if you need to invoke AWS from remote systems which do not provide ambient federation (eg on [GCP using OIDC tokens](https://github.com/salrashid123/awscompat)), then you must either utilize an AWS credentials file or set them dynamically as an environment variable.  
 
@@ -8,8 +8,8 @@ This repo provides three ways to protect the aws secret:
 
 1. Wrap the secret using KMS and access it via TINK.
 2. Embed the secret into an HSM an access it via PKCS11
-3. Embed the secret into an TM an access it via go-tpm
-
+3. Embed the secret into an TPM an access it via go-tpm
+4. Embed the secret into an Vault an access it via Vault APIs
 
 >> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
 
@@ -324,6 +324,8 @@ The this code does is the magic:
 In this variation, you will embed the AWS HMAC key into a Trusted Platform Module (TPM).  One embedded, the key will never leave the device can only be accessed to "sign" similar to the PKCS example above.  To note, the TPM itself has a PKCS interface but at the moment, it does not support  HMAC operations like import.  See [Issue #688](https://github.com/tpm2-software/tpm2-pkcs11/issues/688).  On the other end, go-tpm does not support pretty much any hmac operations: [Issue 249](https://github.com/google/go-tpm/issues/249)
 
 
+also see [awsv4signer: aws-sdk-go pluggable request signer](https://github.com/psanford/awsv4signer)
+
 Usage:
 
 -  Create a VM with a vTPM anywhere...eg, on GCP  [https://github.com/salrashid123/tpm2#usage](https://github.com/salrashid123/tpm2#usage)
@@ -427,6 +429,72 @@ keyedhash: 3d2733a76ef6723e5ddb7e1ab88eab0c5e9b2728606756334cc9639570b26cea
 ```
 
 Anyway this is a POC on using TPM embedded AWS keys. 
+
+
+### Hashicorp Vault
+
+In this variation, you will embed the `AWS HMAC` key into a Vault's [Transit Engine](https://www.vaultproject.io/api-docs/secret/transit)
+
+Vault already has a [secrets engine for AWS](https://www.vaultproject.io/docs/secrets/aws) which returns temp AWS Access keys to you.
+
+However, in this we are doing something different:  we are going to embed an AWS Secret *INTO* vault and use Vault's own [transit hmac](https://www.vaultproject.io/api-docs/secret/transit#generate-hmac) to sign the AWS request
+
+Usage:
+
+```bash
+# add to /etc/hosts
+#    127.0.0.1 vault.domain.com
+
+# start vault
+cd vault_resources
+vault server -config=server.conf 
+
+
+# new window
+export VAULT_ADDR='https://vault.domain.com:8200'
+export VAULT_CACERT=/full/path/to/aws_hmac/vault_resources/ca.pem
+vault  operator init
+# note down the UNSEAL_KEYS and the INITIAL_ROOT_TOKEN
+
+## unseal vault
+vault  operator unseal $UNSEAL_KEYS_N
+
+export VAULT_TOKEN=$INITIAL_ROOT_TOKEN
+vault secrets enable transit
+
+## Create a temp transit key
+
+
+export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKF4ZY5GGQ
+export AWS_SECRET_ACCESS_KEY=HMrL6cNwJCNQzRX8oN-redacted
+export IMPORT_AWS_SECRET_ACCESS_KEY=`echo -n "AWS4$AWS_SECRET_ACCESS_KEY" | base64`
+echo $IMPORT_AWS_SECRET_ACCESS_KEY
+
+export BACKUP_B64="$(cat key_backup.json | base64)"
+vault write transit/restore/aws-key-1 backup="${BACKUP_B64}"
+vault read transit/keys/aws-key-1
+
+# check hmac works
+echo -n "foo" | base64 | vault write transit/hmac/aws-key-1/sha2-256  input=-
+```
+
+Create a vault policy to test the signer
+```bash
+vault policy write token-policy  token_policy.hcl
+vault policy write secrets-policy  secrets_policy.hcl
+
+# create a token with those policies (VAULT_TOKEN_FROM_POLICY)
+vault token create -policy=token-policy -policy=secrets-policy
+```
+
+Now run the vault client application
+
+```log
+# go run main.go -mode=vault    --awsRegion=us-east-1 \
+   -accessKeyID $AWS_ACCESS_KEY_ID \
+   -secretAccessKey $AWS_SECRET_ACCESS_KEY \
+   -vaultToken=$VAULT_TOKEN_FROM_POLICY
+```
 
 ---
 

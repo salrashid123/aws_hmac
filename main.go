@@ -67,9 +67,14 @@ var (
 	accessKeyID     = flag.String("accessKeyID", "", "AWS AccessKeyID")
 	secretAccessKey = flag.String("secretAccessKey", "", "AWS SecretAccessKey")
 
-	awsRegion = flag.String("awsRegion", "us-east-2", "AWS Region")
+	awsRegion = flag.String("awsRegion", "us-east-1", "AWS Region")
 	mode      = flag.String("mode", "pkcs", "What to test: pkcs|tink|tpm")
 	a         tink.MAC
+
+	vaultCAcert = flag.String("vaultCAcert", "vault_resources/ca.pem", "CA for the vault server")
+	vaultAddr   = flag.String("vaultAddr", "https://vault.domain.com:8200", "Address of the vault server")
+	vaultToken  = flag.String("vaultToken", "", "Vault Token")
+	vaultPath   = flag.String("vaultPath", "transit/hmac/aws-key-1/sha2-256", "Path to the HMAC Key")
 
 	tpmPath       = flag.String("tpm-path", "/dev/tpm0", "Path to the TPM device (character device or a Unix socket).")
 	primaryHandle = flag.String("primaryHandle", "primary.bin", "Handle to the primary")
@@ -491,6 +496,24 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
+	} else if *mode == "vault" {
+		if *vaultToken == "" {
+			log.Fatal("vaultToken must be set if mode=vault")
+		}
+
+		cc, err = hmaccred.NewHMACCredential(&hmaccred.HMACCredentialConfig{
+			VaultConfig: hmaccred.VaultConfig{
+				VaultToken:  *vaultToken,
+				VaultCAcert: *vaultCAcert,
+				VaultPath:   *vaultPath,
+				VaultAddr:   *vaultAddr,
+			},
+			AccessKeyID: *accessKeyID,
+		})
+		if err != nil {
+			fmt.Printf("%v", err)
+			return
+		}
 
 	} else {
 		log.Fatal("Mode must be either pkcs or tink")
@@ -510,7 +533,7 @@ func main() {
 	//   e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  empty.txt
 
 	payloadHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	hs.SignHTTP(ctx, *cc, sreq, payloadHash, "sts", "us-east-1", time.Now())
+	hs.SignHTTP(ctx, *cc, sreq, payloadHash, "sts", *awsRegion, time.Now())
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
