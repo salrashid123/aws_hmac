@@ -467,9 +467,21 @@ vault secrets enable transit
 
 export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKF4ZY5GGQ
 export AWS_SECRET_ACCESS_KEY=HMrL6cNwJCNQzRX8oN-redacted
+
+## this is critical...append AWS4 to the secret_access_key and use that as the hmac key to import
 export IMPORT_AWS_SECRET_ACCESS_KEY=`echo -n "AWS4$AWS_SECRET_ACCESS_KEY" | base64`
 echo $IMPORT_AWS_SECRET_ACCESS_KEY
+```
 
+Edit `key_backup.json` and specify the `IMPORT_AWS_SECRET_ACCESS_KEY` as the `hmac_key` value
+
+```json
+"hmac_key": "QVdTNEhNckw2Y053SkNOUXpSWDhvTjNtbm8vamlLT-redacted",
+```
+
+Now import the key into vault
+
+```bash
 export BACKUP_B64="$(cat key_backup.json | base64)"
 vault write transit/restore/aws-key-1 backup="${BACKUP_B64}"
 vault read transit/keys/aws-key-1
@@ -479,6 +491,7 @@ echo -n "foo" | base64 | vault write transit/hmac/aws-key-1/sha2-256  input=-
 ```
 
 Create a vault policy to test the signer
+
 ```bash
 vault policy write token-policy  token_policy.hcl
 vault policy write secrets-policy  secrets_policy.hcl

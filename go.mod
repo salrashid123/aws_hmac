@@ -3,13 +3,12 @@ module main
 go 1.15
 
 require (
-	github.com/aws/aws-sdk-go v1.36.29
-	github.com/aws/smithy-go v1.4.0 // indirect
+	github.com/aws/aws-sdk-go v1.37.0
 	github.com/golang/protobuf v1.5.2
-	github.com/google/go-tpm v0.3.3-0.20210409082102-d3310770bfec
-	github.com/google/go-tpm-tools v0.2.2-0.20210609182153-59d8543b236d
-	github.com/google/tink/go v1.6.0
-	github.com/miekg/pkcs11 v1.0.3
+	github.com/google/go-tpm v0.3.3
+	github.com/google/go-tpm-tools v0.3.7
+	github.com/google/tink/go v1.6.1
+	github.com/miekg/pkcs11 v1.1.1
 	// github.com/salrashid123/aws_hmac/aws v0.0.0
 	// github.com/salrashid123/aws_hmac/aws/credentials v0.0.0
 	// github.com/salrashid123/aws_hmac/aws/internal v0.0.0 // indirect
