@@ -19,8 +19,8 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 
-	hmacsigner "github.com/salrashid123/aws_hmac/tpm"
-	hmaccred "github.com/salrashid123/aws_hmac/tpm/credentials"
+	hmaccred "github.com/salrashid123/aws_hmac/tpm"
+	hmacsigner "github.com/salrashid123/aws_hmac/tpm/v4"
 )
 
 /*

@@ -7,7 +7,7 @@ require (
 	github.com/google/go-tpm v0.9.0
 	github.com/google/go-tpm-tools v0.4.0
 	github.com/salrashid123/aws_hmac/tpm v0.0.0
-	github.com/salrashid123/aws_hmac/tpm/credentials v0.0.0
+	github.com/salrashid123/aws_hmac/tpm/v4 v4.0.0
 )
 
 require (
@@ -29,5 +29,5 @@ require (
 
 replace (
 	github.com/salrashid123/aws_hmac/tpm => ../../tpm
-	github.com/salrashid123/aws_hmac/tpm/credentials => ../../tpm/credentials
+	github.com/salrashid123/aws_hmac/tpm/v4 => ../../tpm/v4
 )
