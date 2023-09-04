@@ -6,17 +6,55 @@ AWS secret key and ID can be thought of as a username/password and should be car
 
 This repo provides three ways to protect the aws secret:
 
-1. Wrap the secret using KMS and access it via TINK.
-2. Embed the secret into an HSM an access it via PKCS11
-3. Embed the secret into an TPM an access it via go-tpm
-4. Embed the secret into an Vault an access it via Vault APIs
+1. Wrap the secret using `KMS` and access it via `TINK`. 
+  * `"github.com/salrashid123/aws_hmac/tink"`
+
+2. Embed the secret into an `HSM` an access it via `PKCS11` 
+  * `"github.com/salrashid123/aws_hmac/pkcs"`
+
+3. Embed the secret into an `TPM` an access it via `go-tpm`  
+  * `"github.com/salrashid123/aws_hmac/tpm"`
+
+4. Embed the secret into an `Vault` an access it via `Vault` APIs 
+  * `"github.com/salrashid123/aws_hmac/vault"`
 
 >> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
 
->> Most of the code under the `aws/` folder is taken from [https://github.com/aws/aws-sdk-go-v2/blob/main/aws/signer/v4/v4.go](https://github.com/aws/aws-sdk-go-v2/blob/main/aws/signer/v4/v4.go) which i modified for TINK and PKCS11
+>> Most of the code under the `credentials/` and `internal/` folder is taken from [https://github.com/aws/aws-sdk-go-v2/blob/main/aws/signer/v4/v4.go](https://github.com/aws/aws-sdk-go-v2/blob/main/aws/signer/v4/v4.go)
+
 ---
 
-In (1) you are using KMS to encrypt the Secret and save it in encrypted format.  When you need to access the Secret to make it generate an AWS v4 signing request, the raw Secret is automatically decrypted by TINK using KMS and made to HMAC sign.  The user will never need to "see" the secret but it is true that the key gets decoded in memory.  You will also need to have access to KMS in the first place so this example is a bit convoluted.   Use this if you already have access to another cloud providers KMS (eg GCP KMS), then use that decrypt the Key and then make it sign:
+#### PKCS Usage Overview
+
+With this, you are embedding the HMAC key *INTO* an HSM.  When you then need to access the secret, you ask the HSM to generate an HMAC for the AWS v4 signing process.   At no time does the client ever see the secret after it is embedded: the actual HMAC is done within the HSM. 
+
+Once the key is embedded into an HSM, you can access it to sign, verify, etc but the key is ever exposed
+
+```bash
+$ pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  --list-objects --pin mynewpin
+	Secret Key Object; unknown key algorithm 43
+	label:      HMACKey
+	ID:         0100
+	Usage:      verify
+	Access:     sensitive
+```
+
+The big advantage of (2) is clear, the HSM owns the key and is not exportable:  nobody will see the raw key once thats done but yet you can use it to create an AWS s4 sign.
+
+#### TPM Usage Overview
+
+Similar to PKCS but here you are not using the cumbersome overlay that PKCS requires and directly using the embedded token from a `Trusted Platform Module (TPM)`
+
+#### Vault Usage Overview
+
+For this, the AWS key is saved into HashiCorp Vaults [Transit Engine](https://www.vaultproject.io/api-docs/secret/transit).
+
+While Vault already has a [secrets engine for AWS](https://www.vaultproject.io/docs/secrets/aws) which returns temp AWS Access keys to you, this instead embeds an AWS Secret *INTO* vault and use Vault's own [transit hmac](https://www.vaultproject.io/api-docs/secret/transit#generate-hmac) to sign the AWS request.
+
+
+#### TINK Usage Overview
+
+In (1) you are using KMS to encrypt the Secret and save it in encrypted format.  When you need to access the Secret to make it generate an AWS v4 signing request, the raw Secret is automatically decrypted by TINK using KMS and made to HMAC sign.  The user will never need to "see" the secret but it is true that the key gets decrypted locally...  You will also need to have access to KMS in the first place so this example is a bit convoluted.   Use this if you already have access to another cloud providers KMS (eg GCP KMS), then use that decrypt the Key and then make it sign though the utility of this mechanism is limited since the hmac key is decrypted locally ultimately.
 
 The encrypted Key would look like the following:
 
@@ -36,26 +74,7 @@ The encrypted Key would look like the following:
 	}
 }
 ```
-
 ---
-
-In (2), you are embedding the HMAC key *INTO* an HSM.  When you then need to access the secret, you ask the HSM to generate an HMAC for the AWS v4 signing process.   At no time does the client ever see the secret after it is embedded: the actual HMAC is done within the HSM. 
-
-Once the key is embedded into an HSM, you can access it to sign, verify, etc but the key is ever exposed
-
-```bash
-$ pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  --list-objects --pin mynewpin
-	Secret Key Object; unknown key algorithm 43
-	label:      HMACKey
-	ID:         0100
-	Usage:      verify
-	Access:     sensitive
-```
-
----
-
-The big advantage of (2) is clear, the HSM owns the key and is not exportable:  nobody will see the raw key once thats done but yet you can use it to create an AWS s4 sign.
-
 
 ### AWS v4 Signing Protocol
 
@@ -76,131 +95,9 @@ Some references for TINK and PKCS11:
 - [Go PKCS11 Samples](https://github.com/salrashid123/go_pkcs11)
 - [Importing external HMAC as TINK EncryptedKeySet](https://github.com/salrashid123/tink_samples/tree/main/external_hmac)
 
-
-## TINK
-
-To use TINK, we will assume you are a GCP customer with access to GCP KMS and want to access AWS via v4 Signing
-
-First create a KMS keychain,key for Symmetric Encryption:
-
-```bash
-export PROJECT_ID=`gcloud config get-value core/project`
-export PROJECT_NUMBER=`gcloud projects describe $PROJECT_ID --format='value(projectNumber)'`
-export LOCATION=us-central1
-export USER=`gcloud config get-value core/account`
-
-# create keyring
-gcloud kms keyrings create mykeyring --location $LOCATION
-
-# create key
-gcloud kms keys create key1 --keyring=mykeyring --purpose=encryption --location=$LOCATION
-
-gcloud kms keys add-iam-policy-binding key1 \
-    --keyring mykeyring \
-    --location $LOCATION \
-    --member user:$USER \
-    --role roles/cloudkms.cryptoKeyDecrypter
-```
-
-Now create an EncryptedKeySet with Tink, then read in that KeySet and make Tink generate an HMAC signature:
-
-```bash
-export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKERNFQLHJ
-export AWS_SECRET_ACCESS_KEY=YRJ86SK5qTOZQzZTI1u-redacted
-
-$ go run main.go --mode=tink \
-  --keyURI "projects/$PROJECT_ID/locations/$LOCATION/keyRings/mykeyring/cryptoKeys/key1" \
-  --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
-  -secretAccessKey $AWS_SECRET_ACCESS_KEY
-
-		2021/06/02 17:50:44    Create tink subtle.HMAC using secret
-		2021/06/02 17:50:44    Tink Keyset:
-		{
-			"encryptedKeyset": "CiUAmT+VVfqKvEJIXDR1j+kuMjx1fatYYcFmxmrPjtPMhD+p+/E8EqUBACsKZVKCnrihcBHGUoD2ql1CqLsMVzM2MnZkYrKalNdhxB7vUs3y3CScnnsdH+80cTSiVr8ybugaG7c4LKMDw4dB06ox8TS1YbB/hL5+W3IX2yOWPqyFN/t/RVe2QyjGQr7rPqQGM0gOJHDEyTdMX8a9YzG6D7sVM15QQmQtLwKkXNYWr2c0O8iRNRiBcV0ekFwouenMj7+VseyeN0m/dyHNM610",
-			"keysetInfo": {
-				"primaryKeyId": 2596996162,
-				"keyInfo": [
-					{
-						"typeUrl": "type.googleapis.com/google.crypto.tink.HmacKey",
-						"status": "ENABLED",
-						"keyId": 2596996162,
-						"outputPrefixType": "RAW"
-					}
-				]
-			}
-		}
-		2021/06/02 17:50:44     Constructing MAC with TINK
-		2021/06/02 17:50:44     Signed RequestURI: 
-		2021/06/02 17:50:44     STS Response:  
-		<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
-		<GetCallerIdentityResult>
-			<Arn>arn:aws:iam::291738886548:user/svcacct1</Arn>
-			<UserId>AIDAUH3H6EGKDO36JYJH3</UserId>
-			<Account>291738886548</Account>
-		</GetCallerIdentityResult>
-		<ResponseMetadata>
-			<RequestId>985a21aa-42b3-47af-ab12-9602de5f4a88</RequestId>
-		</ResponseMetadata>
-		</GetCallerIdentityResponse>
-```
-
-The relevant code that read in TINK is:
-
-```golang
-
-import (
-
-	"github.com/golang/protobuf/proto"
-	"github.com/google/tink/go/keyset"
-	"github.com/google/tink/go/mac/subtle"
-	common_go_proto "github.com/google/tink/go/proto/common_go_proto"
-	tinkpb "github.com/google/tink/go/proto/tink_go_proto"
-	"github.com/google/tink/go/tink"
-	hmacpb "github.com/google/tink/go/proto/hmac_go_proto"
-	"github.com/google/tink/go/core/registry"
-	"github.com/google/tink/go/integration/gcpkms"
-
-	hmacsigner "github.com/salrashid123/aws_hmac/aws"
-	hmaccred "github.com/salrashid123/aws_hmac/aws/credentials"
-)
-
-	// register the backend KMS, in this case its GCP
-		gcpClient, err := gcpkms.NewClient("gcp-kms://")
-		registry.RegisterKMSClient(gcpClient)
-
-		backend, err := gcpClient.GetAEAD("gcp-kms://" + *keyURI)
-
-	// read the KeySetJSON as 
-		var prettyJSON bytes.Buffer
-		error := json.Indent(&prettyJSON, buf.Bytes(), "", "\t")
-
-	// create credentials
-		cc, err = hmaccred.NewHMACCredential(&hmaccred.HMACCredentialConfig{
-			TinkConfig: hmaccred.TinkConfig{
-				KmsBackend: backend,
-				JSONBytes:  prettyJSON.Bytes(),
-			},
-			AccessKeyID: *accessKeyID,
-		})
-
-	hs := hmacsigner.NewSigner()
-
-	body := strings.NewReader("")
-	sreq, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", body)
-
-	payloadHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-
-	// Sign the request
-	hs.SignHTTP(ctx, *cc, sreq, payloadHash, "sts", "us-east-1", time.Now())
-
-    // use signedURL
-	sres, err := http.DefaultClient.Do(sreq)
-
-```
-
 ---
 
-## PKCS11
+## Usage PKCS11
 
 For PKCS, we will use [SoftHSM](https://github.com/opendnssec/SoftHSMv2) which supports the PKCS mechanism to use HMAC. You should be able to use other HSM like yubikey, etc but unfortunately, TPM's CLi i used for PKCS does not support HMAC imports:  see [Support TPM HMAC Import](https://github.com/tpm2-software/tpm2-pkcs11/issues/688).
 
@@ -223,12 +120,11 @@ $ ldd /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
 Now initialize the SoftHSM device:
 
 ```bash
-edit aws_hmac/softhsm/softhsm.conf
-# set directories.tokendir = /path/to/aws_hmac/softhsm/tokens
-
-export SOFTHSM2_CONF=`pwd`/softhsm/softhsm.conf
 
 # initialize softHSM and list supported mechanisms
+cd example/pkcs
+export SOFTHSM2_CONF=`pwd`/softhsm/softhsm.conf
+
 rm -rf /tmp/tokens
 mkdir /tmp/tokens
 pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so --slot-index=0 --init-token --label="token1" --so-pin="123456"
@@ -249,7 +145,7 @@ note, after step2, the AWS secret is embedded inside the HSM and can only be use
 export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKERNFQLHJ
 export AWS_SECRET_ACCESS_KEY=YRJ86SK5qTOZQzZTI1u-redacted
 
-go run main.go --mode=pkcs \
+go run main.go \
   --hsmLibrary /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  \
   --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
   -secretAccessKey $AWS_SECRET_ACCESS_KEY
@@ -258,7 +154,7 @@ go run main.go --mode=pkcs \
 The output of this will run `STS.GetCallerIdentity`
 
 ```log
-$ go run main.go --mode=pkcs --hsmLibrary /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so \
+$ go run main.go --hsmLibrary /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so \
     --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
 	-secretAccessKey $AWS_SECRET_ACCESS_KEY
 	
@@ -319,7 +215,7 @@ The this code does is the magic:
 ```
 
 
-### TPM
+## Usage TPM
 
 In this variation, you will embed the AWS HMAC key into a Trusted Platform Module (TPM).  One embedded, the key will never leave the device can only be accessed to "sign" similar to the PKCS example above.  To note, the TPM itself has a PKCS interface but at the moment, it does not support  HMAC operations like import.  See [Issue #688](https://github.com/tpm2-software/tpm2-pkcs11/issues/688).  On the other end, go-tpm does not support pretty much any hmac operations: [Issue 249](https://github.com/google/go-tpm/issues/249)
 
@@ -328,52 +224,95 @@ also see [awsv4signer: aws-sdk-go pluggable request signer](https://github.com/p
 
 Usage:
 
--  Create a VM with a vTPM anywhere...eg, on GCP  [https://github.com/salrashid123/tpm2#usage](https://github.com/salrashid123/tpm2#usage)
+-  Create a VM with a vTPM anywhere
+
+import your aws secret using `go-tpm-tools` or or via `tpm2_tools`.  You can also securely transfer/duplicate an HMAC key from one TPM to another.  For that flow, see [Duplicate an externally loaded HMAC key](https://github.com/salrashid123/tpm2/tree/master/tpm2_duplicate#duplicate-an-externally-loaded-hmac-key).
+
+For this tutorial, we will just do a plain import
+
+#### Import HMAC key using tpm2_tools
+
+If you installed `tpm2_tools`, then you can either directly import a key or do a secure sealed duplication (see [tpm2_duplicate](https://github.com/salrashid123/tpm2/tree/master/tpm2_duplicate))
+
+The following does a direct import
+
+```bash
+export AWS_SECRET_ACCESS_KEY="change this password to a secret"
+export plain="foo"
+
+echo -n $AWS_SECRET_ACCESS_KEY > hmac.key
+hexkey=$(xxd -p -c 256 < hmac.key)
+echo $hexkey
+echo -n $plain > data.in
+
+openssl dgst -sha256 -mac hmac -macopt hexkey:$hexkey data.in
+ 
+### create primary object on owner auith
+tpm2 createprimary -Q -G rsa -g sha256 -C o -c primary.ctx
+tpm2 import -C primary.ctx -G hmac -i hmac.key -u hmac.pub -r hmac.priv
+tpm2 load -C primary.ctx -u hmac.pub -r hmac.priv -c hmac.ctx
+
+# evict it to handle 0x81008001
+tpm2_evictcontrol -C o -c hmac.ctx 0x81008001 
+# to remove the persistent handle handle
+##  tpm2_evictcontrol -C o -c 0x81008001
+
+echo -n $plain | tpm2_hmac -g sha256 -c 0x81008001 | xxd -p -c 256
+
+### after a system reboot, reacquire use the persistent handle or reload the primary key tree
+### with persistent handle
+echo -n $plain | tpm2_hmac -g sha256 -c 0x81008001 | xxd -p -c 256
+
+### with files
+tpm2 createprimary -Q -G rsa -g sha256 -C o -c primary.ctx
+tpm2 load -C primary.ctx -u hmac.pub -r hmac.priv -c hmac.ctx
+echo -n $plain | tpm2_hmac -g sha256 -c hmac.ctx | xxd -p -c 256
+```
+
+Also see [Importing External HMAC and performing HMAC Signature](https://github.com/salrashid123/tpm2/tree/master/hmac_import))
+
+#### Import HMAC key using go-tpm-tools
 
 One you installed go, just git clone this repo, export the env-vars and run
 
 ```bash
-go run main.go -mode=tpm \
+cd example/tpm
+go run main.go \
     --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
-	-secretAccessKey $AWS_SECRET_ACCESS_KEY
+	-secretAccessKey $AWS_SECRET_ACCESS_KEY --persistentHandle=0x81008001 --flush=all  --evict
 ```
 
 What the script above does is 
 
 1. opens tpm
-2. creates a primary tpm contxet
+2. creates a primary tpm context
 3. creates a tpm public and private sections for HMAC
 4. set the 'sensitive' part of the private key to the raw AWS secret
-5. imports the public private key to the tpm
-6. writes the _handle_ to that hmac object to a file or to a persistent handle.
-7. initialize the `hmaccredentials` object in this repo
-8. Use just the file handle and aws KeyID to access an AWS API.
+5. imports the public hmac key to the tpm
+6. writes the _handle_ to that hmac to a persistent handle (you can also write to files once ([go-tpm-tools issue#349](https://github.com/google/go-tpm-tools/issues/349) is ready)).
 
-Note, this example does an import of a key every time...you can ofcorse stop after step 6 and just run step 7,8 separately.
+After the key is embedded to the persistent handle, you can reuse that between reboots (no need to reimport the raw key)
+
+Note, this example does an import of a key every time...you can ofcorse stop do the import and just use the snippet to sign repeatedly (since the handle is persisted)
 
 this bit bootstraps the tpm and the file handle:
 
 ```golang
-		// pHandle := tpmutil.Handle(0x81010002)
-		// err = tpm2.EvictControl(rwc, emptyPassword, tpm2.HandleOwner, newHandle, pHandle)
-		// if err != nil {
-		// 	fmt.Fprintf(os.Stderr,"Error  persisting hash key  %v\n", err)
-		// 	os.Exit(1)
-		// }
-		// defer tpm2.FlushContext(rwc, pHandle)
-
 		cc, err = hmaccred.NewHMACCredential(&hmaccred.HMACCredentialConfig{
 			TPMConfig: hmaccred.TPMConfig{
-				TpmDevice:     *tpmPath,
-				TpmHandleFile: *hmacKeyHandle,
-				//TpmHandle: 0x81010002,
+			TPMDevice: rwc,
+			TpmHandle: tpmutil.Handle(*persistentHandle),
 			},
 			AccessKeyID: *accessKeyID,
 		})
 ```
 
 ```log
-# go run main.go -mode=tpm     --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID -secretAccessKey $AWS_SECRET_ACCESS_KEY
+$ go run main.go   \
+    --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
+	-secretAccessKey $AWS_SECRET_ACCESS_KEY \
+	--persistentHandle=0x81008001 --flush=all  --evict
+
 		2021/06/10 13:55:51 Using  Standard AWS v4Signer
 		2021/06/10 13:55:52    Response using AWS STS NewStaticCredentials and Standard v4.Singer 
 		<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
@@ -386,8 +325,7 @@ this bit bootstraps the tpm and the file handle:
 			<RequestId>8bab0855-1536-4689-854a-10fe2fdd9500</RequestId>
 		</ResponseMetadata>
 		</GetCallerIdentityResponse>
-		Handle 0x80000000 flushed
-		======= ContextSave (newHandle) ========
+
 		2021/06/10 13:55:52     Signed RequestURI: 
 		2021/06/10 13:55:52     STS Response:  
 		<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
@@ -431,7 +369,131 @@ keyedhash: 3d2733a76ef6723e5ddb7e1ab88eab0c5e9b2728606756334cc9639570b26cea
 Anyway this is a POC on using TPM embedded AWS keys. 
 
 
-### Hashicorp Vault
+## Usage TINK
+
+To use TINK, we will assume you are a GCP customer with access to GCP KMS and want to access AWS via v4 Signing
+
+First create a KMS keychain,key for Symmetric Encryption:
+
+```bash
+export PROJECT_ID=`gcloud config get-value core/project`
+export PROJECT_NUMBER=`gcloud projects describe $PROJECT_ID --format='value(projectNumber)'`
+export LOCATION=us-central1
+export USER=`gcloud config get-value core/account`
+
+# create keyring
+gcloud kms keyrings create mykeyring --location $LOCATION
+
+# create key
+gcloud kms keys create key1 --keyring=mykeyring --purpose=encryption --location=$LOCATION
+
+gcloud kms keys add-iam-policy-binding key1 \
+    --keyring mykeyring \
+    --location $LOCATION \
+    --member user:$USER \
+    --role roles/cloudkms.cryptoKeyDecrypter
+```
+
+Now create an EncryptedKeySet with Tink, then read in that KeySet and make Tink generate an HMAC signature:
+
+```bash
+export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKERNFQLHJ
+export AWS_SECRET_ACCESS_KEY=YRJ86SK5qTOZQzZTI1u-redacted
+
+$ go run main.go \
+  --keyURI "projects/$PROJECT_ID/locations/$LOCATION/keyRings/mykeyring/cryptoKeys/key1" \
+  --awsRegion=us-east-2 -accessKeyID $AWS_ACCESS_KEY_ID \
+  -secretAccessKey $AWS_SECRET_ACCESS_KEY
+
+		2021/06/02 17:50:44    Create tink subtle.HMAC using secret
+		2021/06/02 17:50:44    Tink Keyset:
+		{
+			"encryptedKeyset": "CiUAmT+VVfqKvEJIXDR1j+kuMjx1fatYYcFmxmrPjtPMhD+p+/E8EqUBACsKZVKCnrihcBHGUoD2ql1CqLsMVzM2MnZkYrKalNdhxB7vUs3y3CScnnsdH+80cTSiVr8ybugaG7c4LKMDw4dB06ox8TS1YbB/hL5+W3IX2yOWPqyFN/t/RVe2QyjGQr7rPqQGM0gOJHDEyTdMX8a9YzG6D7sVM15QQmQtLwKkXNYWr2c0O8iRNRiBcV0ekFwouenMj7+VseyeN0m/dyHNM610",
+			"keysetInfo": {
+				"primaryKeyId": 2596996162,
+				"keyInfo": [
+					{
+						"typeUrl": "type.googleapis.com/google.crypto.tink.HmacKey",
+						"status": "ENABLED",
+						"keyId": 2596996162,
+						"outputPrefixType": "RAW"
+					}
+				]
+			}
+		}
+		2021/06/02 17:50:44     Constructing MAC with TINK
+		2021/06/02 17:50:44     Signed RequestURI: 
+		2021/06/02 17:50:44     STS Response:  
+		<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+		<GetCallerIdentityResult>
+			<Arn>arn:aws:iam::291738886548:user/svcacct1</Arn>
+			<UserId>AIDAUH3H6EGKDO36JYJH3</UserId>
+			<Account>291738886548</Account>
+		</GetCallerIdentityResult>
+		<ResponseMetadata>
+			<RequestId>985a21aa-42b3-47af-ab12-9602de5f4a88</RequestId>
+		</ResponseMetadata>
+		</GetCallerIdentityResponse>
+```
+
+The relevant code that read in TINK is:
+
+```golang
+
+import (
+
+	"github.com/golang/protobuf/proto"
+	"github.com/google/tink/go/keyset"
+	"github.com/google/tink/go/mac/subtle"
+	common_go_proto "github.com/google/tink/go/proto/common_go_proto"
+	tinkpb "github.com/google/tink/go/proto/tink_go_proto"
+	"github.com/google/tink/go/tink"
+	hmacpb "github.com/google/tink/go/proto/hmac_go_proto"
+	"github.com/google/tink/go/core/registry"
+	"github.com/google/tink/go/integration/gcpkms"
+
+	hmacsigner "github.com/salrashid123/aws_hmac/tink"
+	hmaccred "github.com/salrashid123/aws_hmac/tink/credentials"
+)
+
+	// register the backend KMS, in this case its GCP
+		gcpClient, err := gcpkms.NewClient("gcp-kms://")
+		registry.RegisterKMSClient(gcpClient)
+
+		backend, err := gcpClient.GetAEAD("gcp-kms://" + *keyURI)
+
+	// read the KeySetJSON as 
+		var prettyJSON bytes.Buffer
+		error := json.Indent(&prettyJSON, buf.Bytes(), "", "\t")
+
+	// create credentials
+		cc, err = hmaccred.NewHMACCredential(&hmaccred.HMACCredentialConfig{
+			TinkConfig: hmaccred.TinkConfig{
+				KmsBackend: backend,
+				JSONBytes:  prettyJSON.Bytes(),
+			},
+			AccessKeyID: *accessKeyID,
+		})
+
+	hs := hmacsigner.NewSigner()
+
+	body := strings.NewReader("")
+	sreq, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", body)
+
+	payloadHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	// Sign the request
+	hs.SignHTTP(ctx, *cc, sreq, payloadHash, "sts", "us-east-1", time.Now())
+
+    // use signedURL
+	sres, err := http.DefaultClient.Do(sreq)
+
+```
+
+---
+
+
+## Usage Hashicorp Vault
 
 In this variation, you will embed the `AWS HMAC` key into a Vault's [Transit Engine](https://www.vaultproject.io/api-docs/secret/transit)
 
@@ -446,13 +508,13 @@ Usage:
 #    127.0.0.1 vault.domain.com
 
 # start vault
-cd vault_resources
+cd example/vault/vault_resources
 vault server -config=server.conf 
 
 
 # new window
 export VAULT_ADDR='https://vault.domain.com:8200'
-export VAULT_CACERT=/full/path/to/aws_hmac/vault_resources/ca.pem
+export VAULT_CACERT=/full/path/to/aws_hmac/example/vault/vault_resources/ca.pem
 vault  operator init
 # note down the UNSEAL_KEYS and the INITIAL_ROOT_TOKEN
 
@@ -498,12 +560,15 @@ vault policy write secrets-policy  secrets_policy.hcl
 
 # create a token with those policies (VAULT_TOKEN_FROM_POLICY)
 vault token create -policy=token-policy -policy=secrets-policy
+
+## export the token
+export VAULT_TOKEN_FROM_POLICY=s.Upzqu1UwJ-redacted
 ```
 
 Now run the vault client application
 
 ```log
-# go run main.go -mode=vault    --awsRegion=us-east-1 \
+$ go run main.go  --awsRegion=us-east-1 \
    -accessKeyID $AWS_ACCESS_KEY_ID \
    -secretAccessKey $AWS_SECRET_ACCESS_KEY \
    -vaultToken=$VAULT_TOKEN_FROM_POLICY
@@ -511,6 +576,5 @@ Now run the vault client application
 
 ---
 
-### Conclusion
 
 THis is just a POC, caveat emptor
