@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	hmaccred "github.com/salrashid123/aws_hmac/tink/credentials"
+	hmaccred "github.com/salrashid123/aws_hmac/tink"
 )
 
 func lookupKey(service, region string) string {

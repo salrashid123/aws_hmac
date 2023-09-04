@@ -18,8 +18,7 @@ import (
 
 	"github.com/aws/smithy-go/encoding/httpbinding"
 	"github.com/aws/smithy-go/logging"
-	hmaccred "github.com/salrashid123/aws_hmac/pkcs/credentials"
-	v4Internal "github.com/salrashid123/aws_hmac/pkcs/internal"
+	hmaccred "github.com/salrashid123/aws_hmac/vault"
 )
 
 const (
@@ -34,7 +33,7 @@ type HTTPSigner interface {
 }
 
 type keyDerivator interface {
-	DeriveKey(credential hmaccred.HMACCredential, service, region string, signingTime v4Internal.SigningTime) []byte
+	DeriveKey(credential hmaccred.HMACCredential, service, region string, signingTime SigningTime) []byte
 }
 
 // SignerOptions is the SigV4 Signer options.
@@ -78,14 +77,14 @@ func NewSigner(optFns ...func(signer *SignerOptions)) *Signer {
 		fn(&options)
 	}
 
-	return &Signer{options: options, keyDerivator: v4Internal.NewSigningKeyDeriver()}
+	return &Signer{options: options, keyDerivator: NewSigningKeyDeriver()}
 }
 
 type httpSigner struct {
 	Request      *http.Request
 	ServiceName  string
 	Region       string
-	Time         v4Internal.SigningTime
+	Time         SigningTime
 	Credentials  hmaccred.HMACCredential
 	KeyDerivator keyDerivator
 	IsPreSign    bool
@@ -109,18 +108,18 @@ func (s *httpSigner) Build() (signedRequest, error) {
 		sort.Strings(query[key])
 	}
 
-	v4Internal.SanitizeHostForHeader(req)
+	SanitizeHostForHeader(req)
 
 	credentialScope := s.buildCredentialScope()
 	credentialStr := s.Credentials.AccessKeyID + "/" + credentialScope
 	if s.IsPreSign {
-		query.Set(v4Internal.AmzCredentialKey, credentialStr)
+		query.Set(AmzCredentialKey, credentialStr)
 	}
 
 	unsignedHeaders := headers
 	if s.IsPreSign && !s.DisableHeaderHoisting {
 		var urlValues url.Values
-		urlValues, unsignedHeaders = buildQuery(v4Internal.AllowedQueryHoisting, headers)
+		urlValues, unsignedHeaders = buildQuery(AllowedQueryHoisting, headers)
 		for k := range urlValues {
 			query[k] = urlValues[k]
 		}
@@ -131,16 +130,16 @@ func (s *httpSigner) Build() (signedRequest, error) {
 		host = req.Host
 	}
 
-	signedHeaders, signedHeadersStr, canonicalHeaderStr := s.buildCanonicalHeaders(host, v4Internal.IgnoredHeaders, unsignedHeaders, s.Request.ContentLength)
+	signedHeaders, signedHeadersStr, canonicalHeaderStr := s.buildCanonicalHeaders(host, IgnoredHeaders, unsignedHeaders, s.Request.ContentLength)
 
 	if s.IsPreSign {
-		query.Set(v4Internal.AmzSignedHeadersKey, signedHeadersStr)
+		query.Set(AmzSignedHeadersKey, signedHeadersStr)
 	}
 
 	var rawQuery strings.Builder
 	rawQuery.WriteString(strings.Replace(query.Encode(), "+", "%20", -1))
 
-	canonicalURI := v4Internal.GetURIPath(req.URL)
+	canonicalURI := GetURIPath(req.URL)
 	if !s.DisableURIPathEscaping {
 		canonicalURI = httpbinding.EscapePath(canonicalURI, false)
 	}
@@ -240,7 +239,7 @@ func (s Signer) SignHTTP(ctx context.Context, credentials hmaccred.HMACCredentia
 		ServiceName:            service,
 		Region:                 region,
 		Credentials:            credentials,
-		Time:                   v4Internal.NewSigningTime(signingTime.UTC()),
+		Time:                   NewSigningTime(signingTime.UTC()),
 		DisableHeaderHoisting:  options.DisableHeaderHoisting,
 		DisableURIPathEscaping: options.DisableURIPathEscaping,
 		KeyDerivator:           s.keyDerivator,
@@ -315,7 +314,7 @@ func (s *Signer) PresignHTTP(
 		ServiceName:            service,
 		Region:                 region,
 		Credentials:            credentials,
-		Time:                   v4Internal.NewSigningTime(signingTime.UTC()),
+		Time:                   NewSigningTime(signingTime.UTC()),
 		IsPreSign:              true,
 		DisableHeaderHoisting:  options.DisableHeaderHoisting,
 		DisableURIPathEscaping: options.DisableURIPathEscaping,
@@ -351,7 +350,7 @@ func (s *httpSigner) buildCredentialScope() string {
 	}, "/")
 }
 
-func buildQuery(r v4Internal.Rule, header http.Header) (url.Values, http.Header) {
+func buildQuery(r Rule, header http.Header) (url.Values, http.Header) {
 	query := url.Values{}
 	unsignedHeaders := http.Header{}
 	for k, h := range header {
@@ -365,7 +364,7 @@ func buildQuery(r v4Internal.Rule, header http.Header) (url.Values, http.Header)
 	return query, unsignedHeaders
 }
 
-func (s *httpSigner) buildCanonicalHeaders(host string, rule v4Internal.Rule, header http.Header, length int64) (signed http.Header, signedHeaders, canonicalHeadersStr string) {
+func (s *httpSigner) buildCanonicalHeaders(host string, rule Rule, header http.Header, length int64) (signed http.Header, signedHeaders, canonicalHeadersStr string) {
 	signed = make(http.Header)
 
 	var headers []string
@@ -405,7 +404,7 @@ func (s *httpSigner) buildCanonicalHeaders(host string, rule v4Internal.Rule, he
 		if headers[i] == hostHeader {
 			canonicalHeaders.WriteString(hostHeader)
 			canonicalHeaders.WriteRune(colon)
-			canonicalHeaders.WriteString(v4Internal.StripExcessSpaces(host))
+			canonicalHeaders.WriteString(StripExcessSpaces(host))
 		} else {
 			canonicalHeaders.WriteString(headers[i])
 			canonicalHeaders.WriteRune(colon)
@@ -446,26 +445,26 @@ func makeHash(hash hash.Hash, b []byte) []byte {
 
 func (s *httpSigner) buildSignature(strToSign string) (string, error) {
 	key := s.KeyDerivator.DeriveKey(s.Credentials, s.ServiceName, s.Region, s.Time)
-	return hex.EncodeToString(v4Internal.HMACSHA256(key, []byte(strToSign))), nil
+	return hex.EncodeToString(HMACSHA256(key, []byte(strToSign))), nil
 }
 
 func (s *httpSigner) setRequiredSigningFields(headers http.Header, query url.Values) {
 	amzDate := s.Time.TimeFormat()
 
 	if s.IsPreSign {
-		query.Set(v4Internal.AmzAlgorithmKey, signingAlgorithm)
+		query.Set(AmzAlgorithmKey, signingAlgorithm)
 		if sessionToken := s.Credentials.SessionToken; len(sessionToken) > 0 {
 			query.Set("X-Amz-Security-Token", sessionToken)
 		}
 
-		query.Set(v4Internal.AmzDateKey, amzDate)
+		query.Set(AmzDateKey, amzDate)
 		return
 	}
 
-	headers[v4Internal.AmzDateKey] = append(headers[v4Internal.AmzDateKey][:0], amzDate)
+	headers[AmzDateKey] = append(headers[AmzDateKey][:0], amzDate)
 
 	if len(s.Credentials.SessionToken) > 0 {
-		headers[v4Internal.AmzSecurityTokenKey] = append(headers[v4Internal.AmzSecurityTokenKey][:0], s.Credentials.SessionToken)
+		headers[AmzSecurityTokenKey] = append(headers[AmzSecurityTokenKey][:0], s.Credentials.SessionToken)
 	}
 }
 

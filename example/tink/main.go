@@ -26,8 +26,8 @@ import (
 	hmacpb "github.com/google/tink/go/proto/hmac_go_proto"
 	tinkpb "github.com/google/tink/go/proto/tink_go_proto"
 
-	hmacsigner "github.com/salrashid123/aws_hmac/tink"
-	hmaccred "github.com/salrashid123/aws_hmac/tink/credentials"
+	hmaccred "github.com/salrashid123/aws_hmac/tink"
+	hmacsigner "github.com/salrashid123/aws_hmac/tink/v4"
 )
 
 const (

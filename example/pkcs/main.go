@@ -18,8 +18,8 @@ import (
 
 	"flag"
 
-	hmacsigner "github.com/salrashid123/aws_hmac/pkcs"
-	hmaccred "github.com/salrashid123/aws_hmac/pkcs/credentials"
+	hmaccred "github.com/salrashid123/aws_hmac/pkcs"
+	hmacsigner "github.com/salrashid123/aws_hmac/pkcs/v4"
 )
 
 const (

@@ -14,8 +14,8 @@ import (
 
 	"flag"
 
-	hmacsigner "github.com/salrashid123/aws_hmac/vault"
-	hmaccred "github.com/salrashid123/aws_hmac/vault/credentials"
+	hmaccred "github.com/salrashid123/aws_hmac/vault"
+	hmacsigner "github.com/salrashid123/aws_hmac/vault/v4"
 )
 
 const (

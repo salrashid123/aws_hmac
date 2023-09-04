@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/aws/aws-sdk-go v1.43.9
 	github.com/salrashid123/aws_hmac/vault v0.0.0
-	github.com/salrashid123/aws_hmac/vault/credentials v0.0.0
+	github.com/salrashid123/aws_hmac/vault/v4 v4.0.0
 )
 
 require (
@@ -34,5 +34,5 @@ require (
 
 replace (
 	github.com/salrashid123/aws_hmac/vault => ../../vault
-	github.com/salrashid123/aws_hmac/vault/credentials => ../../vault/credentials
+	github.com/salrashid123/aws_hmac/vault/v4 => ../../vault/v4
 )

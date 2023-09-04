@@ -7,7 +7,7 @@ require (
 	github.com/golang/protobuf v1.5.3
 	github.com/google/tink/go v1.7.0
 	github.com/salrashid123/aws_hmac/tink v0.0.0
-	github.com/salrashid123/aws_hmac/tink/credentials v0.0.0
+	github.com/salrashid123/aws_hmac/tink/v4 v4.0.0
 )
 
 require (
@@ -32,5 +32,5 @@ require (
 
 replace (
 	github.com/salrashid123/aws_hmac/tink => ../../tink
-	github.com/salrashid123/aws_hmac/tink/credentials => ../../tink/credentials
+	github.com/salrashid123/aws_hmac/tink/v4 => ../../tink/v4
 )

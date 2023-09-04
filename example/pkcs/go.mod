@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.43.9
 	github.com/miekg/pkcs11 v1.1.1
 	github.com/salrashid123/aws_hmac/pkcs v0.0.0
-	github.com/salrashid123/aws_hmac/pkcs/credentials v0.0.0
+	github.com/salrashid123/aws_hmac/pkcs/v4 v4.0.0
 )
 
 require (
@@ -17,5 +17,5 @@ require (
 
 replace (
 	github.com/salrashid123/aws_hmac/pkcs => ../../pkcs
-	github.com/salrashid123/aws_hmac/pkcs/credentials => ../../pkcs/credentials
+	github.com/salrashid123/aws_hmac/pkcs/v4 => ../../pkcs/v4
 )
