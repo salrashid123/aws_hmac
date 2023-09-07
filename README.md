@@ -1,8 +1,8 @@
-## AWS v4 Signer for embedding Access Secrets to PKCS11, Vault and Trusted Platform Module (TPM)
+## AWS SDK Credentials and Request Signing using Trusted Platform Modules (TPM), HSM, PKCS-11 and Vault
 
-Sample procedure to encrypt AWS Access [Secret Access Key](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) using [GCP Tink](https://developers.google.com/tink/how-tink-works) and a way to embed the the Key into an HSM device supporting [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11), [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module) and [Hashicorp Vault](https://www.vaultproject.io/)
+Sample procedure to **embed** AWS [Secret Access Keys](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) _inside_ an HSM device through [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11), [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module) and [Hashicorp Vault](https://www.vaultproject.io/).
 
-AWS secret key and ID can be thought of as a username/password and should be carefully managed, rotated, secured as described in [Best practices for managing AWS access keys](https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html).   However, if you need to invoke AWS from remote systems which do not provide ambient federation (eg on [GCP using OIDC tokens](https://github.com/salrashid123/awscompat)), then you must either utilize an AWS credentials file or set them dynamically as an environment variable.  
+The critical feature is, once the `AWS_SECRET_ACCESS_KEY` checks in, it never checks out, like a roach motel.  But, you ask the HSM and TPM to issue HMAC signature you can ultimately use for AWS Signatures v4 or more commonly, to access AWS resources.
 
 This repo provides three ways to protect the aws secret:
 
