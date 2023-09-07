@@ -1,13 +1,16 @@
 module main
 
-go 1.20
+go 1.21
 
 require (
-	github.com/aws/aws-sdk-go v1.43.9
+	github.com/aws/aws-sdk-go v1.45.3
 	github.com/google/go-tpm v0.9.0
 	github.com/google/go-tpm-tools v0.4.0
-	github.com/salrashid123/aws_hmac/tpm v0.0.0
-	github.com/salrashid123/aws_hmac/tpm/v4 v4.0.0
+	github.com/gorilla/schema v1.2.0
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0
+	github.com/salrashid123/aws_hmac/tpm v0.0.0-00010101000000-000000000000
+	github.com/salrashid123/aws_hmac/tpm/signer v0.0.0
+	github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0
 )
 
 require (
@@ -28,6 +31,8 @@ require (
 )
 
 replace (
+	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
 	github.com/salrashid123/aws_hmac/tpm => ../../tpm
-	github.com/salrashid123/aws_hmac/tpm/v4 => ../../tpm/v4
+	github.com/salrashid123/aws_hmac/tpm/signer => ../../tpm/signer
+	github.com/salrashid123/aws_hmac/tpm/signer/v4 => ../../tpm/signer/v4
 )

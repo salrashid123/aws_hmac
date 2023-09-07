@@ -2,10 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -19,18 +24,18 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/gorilla/schema"
+
+	"github.com/salrashid123/aws_hmac/stsschema"
+
 	hmaccred "github.com/salrashid123/aws_hmac/tpm"
-	hmacsigner "github.com/salrashid123/aws_hmac/tpm/v4"
+	hmacsigner "github.com/salrashid123/aws_hmac/tpm/signer"
+	hmacsignerv4 "github.com/salrashid123/aws_hmac/tpm/signer/v4"
 )
 
-/*
-go run main.go  --accessKeyID=redacted --secretAccessKey=redacted --persistentHandle=0x81008001 --flush=all  --evict
-
-tpm2_getcap handles-persistent
-- 0x81008001
-
-tpm2_evictcontrol -C o -c 0x81008001
-*/
 const (
 	awsAlgorithm           = "AWS4-HMAC-SHA256"
 	awsRequestType         = "aws4_request"
@@ -49,6 +54,9 @@ var (
 	secretAccessKey = flag.String("secretAccessKey", "", "AWS SecretAccessKey")
 
 	awsRegion = flag.String("awsRegion", "us-east-1", "AWS Region")
+
+	roleARN         = flag.String("roleARN", "arn:aws:iam::291738886548:role/gcpsts", "Role to assume")
+	roleSessionName = "mysession"
 
 	evict            = flag.Bool("evict", false, "evict handle")
 	tpmPath          = flag.String("tpm-path", "/dev/tpm0", "Path to the TPM device (character device or a Unix socket).")
@@ -88,11 +96,11 @@ func main() {
 
 	// // // **************  STS
 
-	log.Println("Using  Standard AWS v4Signer")
+	log.Println("Using Default AWS v4Signer and StaticCredentials to make REST GET call to GetCallerIdentity")
 	creds := credentials.NewStaticCredentials(*accessKeyID, *secretAccessKey, "")
-	rbody := strings.NewReader("")
 	signer := v4.NewSigner(creds)
-	req, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", rbody)
+	rbody := strings.NewReader("")
+	req, err := http.NewRequest(http.MethodGet, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", rbody)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -206,54 +214,132 @@ func main() {
 
 	/// **** Done loading, now use the embedded key
 
-	cc, err := hmaccred.NewHMACCredential(&hmaccred.HMACCredentialConfig{
-		TPMConfig: hmaccred.TPMConfig{
+	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
+		TPMConfig: hmacsigner.TPMConfig{
 			TPMDevice: rwc,
 			TpmHandle: tpmutil.Handle(*persistentHandle),
 		},
 		AccessKeyID: *accessKeyID,
+	})  
+	if err != nil {
+		fmt.Printf("%v", err)
+		return
+	}
+
+	hmacSigner := hmacsignerv4.NewSigner()
+
+	sessionCredentials, err := hmaccred.NewAWSTPMCredentials(hmaccred.TPMProvider{
+		GetSessionTokenInput: &stsschema.GetSessionTokenInput{
+			DurationSeconds: aws.Int64(3600),
+		},
+		Version:   "2011-06-15",
+		Region:    *awsRegion,
+		TPMSigner: tpmSigner,
 	})
 	if err != nil {
-		log.Printf("%v\n", err)
-		os.Exit(1)
+		log.Fatalf("Could not initialize Tink Credentials %v", err)
 	}
 
-	ctx := context.Background()
-	hs := hmacsigner.NewSigner()
-
-	body := strings.NewReader("")
-	sreq, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", body)
-	if err != nil {
-		log.Printf("%v\n", err)
-		os.Exit(1)
-	}
-
-	// $ touch empty.txt
-	// $ sha256sum empty.txt
-	//   e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  empty.txt
-
-	payloadHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	hs.SignHTTP(ctx, *cc, sreq, payloadHash, "sts", *awsRegion, time.Now())
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	log.Printf("    Signed RequestURI: %v\n", sreq.RequestURI)
-
-	sres, err := http.DefaultClient.Do(sreq)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	defer sres.Body.Close()
-	if sres.StatusCode != 200 {
-		log.Printf("Response is not 200 %v\n", err)
-	}
-	sb, err := ioutil.ReadAll(sres.Body)
+	assumeRoleCredentials, err := hmaccred.NewAWSTPMCredentials(hmaccred.TPMProvider{
+		AssumeRoleInput: &stsschema.AssumeRoleInput{
+			RoleArn:         aws.String(*roleARN),
+			RoleSessionName: aws.String(roleSessionName),
+			DurationSeconds: aws.Int64(3600),
+		},
+		Version:     "2011-06-15",
+		Region:      *awsRegion,
+		TPMSigner: tpmSigner,
+	})
 	if err != nil {
 		log.Fatalf("Could not read response Body%v", err)
 	}
 
-	log.Printf("    STS Response:  \n%s", string(sb))
+	ctx := context.Background()
 
+	// *******************************************
+
+	fmt.Println("-------------------------------- Calling HTTP POST on  GetCallerIdentity using Vault Signer")
+
+	getCallerIdentityRequestStruct := stsschema.GetCallerIdentityRequest{
+		Action:  "GetCallerIdentity",
+		Version: "2011-06-15",
+	}
+
+	postForm := url.Values{}
+	err = schema.NewEncoder().Encode(getCallerIdentityRequestStruct, postForm)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	getCallerIdentityPostRequest, err := http.NewRequest(http.MethodPost, "https://sts.amazonaws.com", strings.NewReader(postForm.Encode()))
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	getCallerIdentityPostRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	hasher := sha256.New()
+	hasher.Write([]byte(postForm.Encode()))
+	postPayloadHash := hex.EncodeToString(hasher.Sum(nil))
+
+	hmacSigner.SignHTTP(ctx, *tpmSigner, getCallerIdentityPostRequest, postPayloadHash, "sts", *awsRegion, time.Now())
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	getCallerIdentityPostResponse, err := http.DefaultClient.Do(getCallerIdentityPostRequest)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	defer getCallerIdentityPostResponse.Body.Close()
+
+	if getCallerIdentityPostResponse.StatusCode != 200 {
+		bodyBytes, err := io.ReadAll(getCallerIdentityPostResponse.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Fatalf("Response is not 200 %s %v\n", string(bodyBytes), err)
+	}
+
+	getResponseData, err := ioutil.ReadAll(getCallerIdentityPostResponse.Body)
+	if err != nil {
+		log.Fatalf("Could not read response Body%v", err)
+	}
+	var getCallerIdentityResponseStruct stsschema.GetCallerIdentityResponse
+	err = xml.Unmarshal(getResponseData, &getCallerIdentityResponseStruct)
+	if err != nil {
+		log.Fatalf("Could not read response Body%v", err)
+	}
+	log.Printf("GetCallerIdentityResponse UserID %s\n", getCallerIdentityResponseStruct.CallerIdentityResult.UserId)
+
+	fmt.Println("-------------------------------- GetCallerIdentity with SessionToken SDK")
+
+	sess, err := session.NewSession(&aws.Config{
+		Region:      aws.String(*awsRegion),
+		Credentials: sessionCredentials,
+	})
+
+	stssvc := sts.New(sess, aws.NewConfig().WithRegion(*awsRegion))
+	stsresp, err := stssvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		log.Fatalf("Could not read response Body%v", err)
+	}
+	log.Printf("STS Identity from API %s\n", *stsresp.UserId)
+
+	fmt.Println("-------------------------------- GetCallerIdentity with AssumeRole SDK")
+
+	sess2, err := session.NewSession(&aws.Config{
+		Region:      aws.String(*awsRegion),
+		Credentials: assumeRoleCredentials,
+	})
+
+	if err != nil {
+		log.Fatalf("Could not read response Body%v", err)
+	}
+
+	stssvc2 := sts.New(sess2, aws.NewConfig().WithRegion(*awsRegion))
+	stsresp2, err := stssvc2.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		log.Fatalf("Could not read response Body%v", err)
+	}
+	log.Printf("Assumed role ARN: %s\n", *stsresp2.Arn)
 }
