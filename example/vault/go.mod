@@ -4,10 +4,10 @@ go 1.21
 
 require (
 	github.com/aws/aws-sdk-go v1.45.3
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
-	github.com/salrashid123/aws_hmac/vault v0.0.0-00010101000000-000000000000
-	github.com/salrashid123/aws_hmac/vault/signer v0.0.0
-	github.com/salrashid123/aws_hmac/vault/signer/v4 v4.0.0
+	// github.com/salrashid123/aws_hmac/stsschema v0.0.0
+	// github.com/salrashid123/aws_hmac/vault v0.0.0-00010101000000-000000000000
+	// github.com/salrashid123/aws_hmac/vault/signer v0.0.0
+	// github.com/salrashid123/aws_hmac/vault/signer/v4 v4.0.0
 )
 
 require github.com/gorilla/schema v1.2.0
@@ -37,8 +37,8 @@ require (
 )
 
 replace (
-	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
-	github.com/salrashid123/aws_hmac/vault => ../../vault
-	github.com/salrashid123/aws_hmac/vault/signer => ../../vault/signer
-	github.com/salrashid123/aws_hmac/vault/signer/v4 => ../../vault/signer/v4
+	// github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
+	// github.com/salrashid123/aws_hmac/vault => ../../vault
+	// github.com/salrashid123/aws_hmac/vault/signer => ../../vault/signer
+	// github.com/salrashid123/aws_hmac/vault/signer/v4 => ../../vault/signer/v4
 )
