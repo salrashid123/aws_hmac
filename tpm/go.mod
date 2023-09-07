@@ -8,9 +8,9 @@ require (
 	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907023647-8ea8949a03f4
 	github.com/salrashid123/aws_hmac/tpm/signer v0.0.0-20230907024207-0899a3ac266a
 	github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0-20230907024207-0899a3ac266a
-// github.com/salrashid123/aws_hmac/stsschema v0.0.0-00010101000000-000000000000
-// github.com/salrashid123/aws_hmac/tpm/signer v0.0.0
-// github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0
+	// github.com/salrashid123/aws_hmac/stsschema v0.0.0-00010101000000-000000000000
+	// github.com/salrashid123/aws_hmac/tpm/signer v0.0.0
+	// github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0
 
 )
 
@@ -19,7 +19,6 @@ require (
 	github.com/google/go-tpm v0.9.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 )
-
 
 replace (
 	// github.com/salrashid123/aws_hmac/stsschema => ../stsschema

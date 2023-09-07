@@ -69,8 +69,12 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/ryanuber/columnize v2.1.0+incompatible/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/ryanuber/go-glob v1.0.0 h1:iQh3xXAumdQ+4Ufa5b25cRpC5TYKlno6hsv6Cb3pkBk=
 github.com/ryanuber/go-glob v1.0.0/go.mod h1:807d1WSdnB0XRJzKNil9Om6lcp/3a0v4qIHxIXzX/Yc=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030921-a484b3780719 h1:w+eftP1du5c3ZZPBlg8Vn0wHinp2cZq/WUFar1zi9+Q=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030921-a484b3780719/go.mod h1:/JTINTWSeIL/gvkmlGh7O5+knoymbf0cSat/QDaTOC0=
 github.com/salrashid123/aws_hmac/vault/signer v0.0.0-20230907025004-21e21d0dabc4 h1:TnjWOk+UDFkO7dcm8JC74iTwxgxJEzdWDj3K0T+9J5E=
 github.com/salrashid123/aws_hmac/vault/signer v0.0.0-20230907025004-21e21d0dabc4/go.mod h1:ZBuMIRUVdzkEmA3xIeP8C9fixZjwPd83X/Ff/fnfx34=
+github.com/salrashid123/aws_hmac/vault/signer/v4 v4.0.0-20230907030921-a484b3780719 h1:WI+Vo5RMj2KvmEMmZ6QnyVMJbZQHs8UGC0jT3iH9YI4=
+github.com/salrashid123/aws_hmac/vault/signer/v4 v4.0.0-20230907030921-a484b3780719/go.mod h1:gMggQbCx7kOs58W3Q/SdRGgdhZVrYUxpqTodthEWQZM=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=

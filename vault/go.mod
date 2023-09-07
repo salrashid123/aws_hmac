@@ -5,10 +5,12 @@ go 1.21
 require (
 	github.com/aws/aws-sdk-go v1.45.3
 	github.com/gorilla/schema v1.2.0
-// github.com/salrashid123/aws_hmac/stsschema v0.0.0-00010101000000-000000000000
-// github.com/salrashid123/aws_hmac/vault/signer v0.0.0
-// github.com/salrashid123/aws_hmac/vault/signer/v4 v4.0.0
-
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030921-a484b3780719
+	github.com/salrashid123/aws_hmac/vault/signer v0.0.0-20230907025004-21e21d0dabc4
+	github.com/salrashid123/aws_hmac/vault/signer/v4 v4.0.0-20230907030921-a484b3780719
+	// github.com/salrashid123/aws_hmac/stsschema v0.0.0-00010101000000-000000000000
+	// github.com/salrashid123/aws_hmac/vault/signer v0.0.0
+	// github.com/salrashid123/aws_hmac/vault/signer/v4 v4.0.0
 )
 
 require (
@@ -28,7 +30,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
-	github.com/salrashid123/aws_hmac/vault/signer v0.0.0-20230907025004-21e21d0dabc4 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/text v0.7.0 // indirect

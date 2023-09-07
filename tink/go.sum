@@ -15,8 +15,12 @@ github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHW
 github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030921-a484b3780719 h1:w+eftP1du5c3ZZPBlg8Vn0wHinp2cZq/WUFar1zi9+Q=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030921-a484b3780719/go.mod h1:/JTINTWSeIL/gvkmlGh7O5+knoymbf0cSat/QDaTOC0=
 github.com/salrashid123/aws_hmac/tink/signer v0.0.0-20230907025004-21e21d0dabc4 h1:BM2RlRU6CQk59UQhoKezT7LwwfMtV+T7/74I1oCbFLE=
 github.com/salrashid123/aws_hmac/tink/signer v0.0.0-20230907025004-21e21d0dabc4/go.mod h1:STRtojh4SUzWjAhc3KaYK9ODuukHTE3a+mb4M8XrFV8=
+github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0-20230907030921-a484b3780719 h1:4L7IzSjDIfoVZJA7eke3ExZ+KhD/iYJjUiNcAEqURn8=
+github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0-20230907030921-a484b3780719/go.mod h1:frV1ZyNAWHe52wmFXP/BUThFXEkMAtkW7w9tWm/v+P4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

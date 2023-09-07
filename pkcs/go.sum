@@ -14,6 +14,10 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0-20230907025004-21e21d0dabc4 h1:zhJcUI2cPtLGn4yFDvJNhRJ+UA+jvt+4Smx0zbW6BVQ=
 github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0-20230907025004-21e21d0dabc4/go.mod h1:OCO5WlbEznWJu4ow+8d35SHMxLkl5siuN+QQ6svfvnk=
+github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0-20230907030921-a484b3780719 h1:aTYDy/tEQtPoCJ8SXvziqFUhcVLEY1uEp1jC3j8wkf0=
+github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0-20230907030921-a484b3780719/go.mod h1:lqZgXQG9WHcrTIzvR2H1gy/v0Ugb9vOS/9GiQQUtP5w=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030921-a484b3780719 h1:w+eftP1du5c3ZZPBlg8Vn0wHinp2cZq/WUFar1zi9+Q=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030921-a484b3780719/go.mod h1:/JTINTWSeIL/gvkmlGh7O5+knoymbf0cSat/QDaTOC0=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
