@@ -4,19 +4,19 @@ Sample procedure to **embed** AWS [Secret Access Keys](https://docs.aws.amazon.c
 
 The critical feature is, once the `AWS_SECRET_ACCESS_KEY` checks in, it never checks out, like a roach motel.  But, you ask the HSM and TPM to issue HMAC signature you can ultimately use for AWS Signatures v4 or more commonly, to access AWS resources.
 
-This repo provides three ways to protect the aws secret:
+This repo provides four ways to protect the aws secret:
 
-1. Wrap the secret using `KMS` and access it via `TINK`. 
-  * `"github.com/salrashid123/aws_hmac/tink"`
-
-2. Embed the secret into an `HSM` an access it via `PKCS11` 
+1. Embed the secret into an `HSM` an access it via `PKCS11` 
   * `"github.com/salrashid123/aws_hmac/pkcs"`
 
-3. Embed the secret into an `TPM` an access it via `go-tpm`  
+2. Embed the secret into an `TPM` an access it via `go-tpm`  
   * `"github.com/salrashid123/aws_hmac/tpm"`
 
-4. Embed the secret into an `Vault` an access it via `Vault` APIs 
+3. Embed the secret into an `Vault` an access it via `Vault` APIs 
   * `"github.com/salrashid123/aws_hmac/vault"`
+
+4. Wrap the secret using `KMS` and access it via `TINK`. 
+  * `"github.com/salrashid123/aws_hmac/tink"`
 
 >> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
 
@@ -24,20 +24,20 @@ This repo provides three ways to protect the aws secret:
 
 ### AWS v4 Signing Protocol
 
-While you can embed many types of keys to hardware like TPM or HSM or software key management system like Vault, applying those embedded keys to authenticate to AWS requires some background on how AWS signatures work.
+While you can embed many types of keys to hardware like `TPM` or `HSM` or software key management system like `Vault`, applying those embedded keys to authenticate to AWS requires some background on how AWS signatures work.
 
 The [AWS Signing](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-signing.html) protocol uses the `AWS_SECRET_ACCESS_KEY` to create an HMAC signature by first adding a small prefix (`AWS4`) to the key.
 
-What that means is if we can embed `AWS4$AWS_SECRET_ACCESS_KEY` into an HSM, we can ask it to perform an HMAC to kick off the whole signature process:
+What that means is if we can embed `AWS4$AWS_SECRET_ACCESS_KEY` into an HSM, we can ask it to perform an HMAC to kick off the first step in the whole signature process:
 
 - ![images/sign_protocol.png](images/sign_protocol.png)
 
-Once we have the ability to generate an HMAC, we can complete the flow and create  [Create a signed AWS API request](https://docs.aws.amazon.com/IAM/latest/UserGuide/create-signed-request.html)
+Once we have the ability to generate an HMAC, we can ask the TPM for the first application and then perform the rest of the chain of operations outside.  The chain itself is shown in the diagram above and described [here](https://docs.aws.amazon.com/IAM/latest/UserGuide/create-signed-request.html)
 
-This repo provides two variations:
+This repo provides two variations to access AWS:
 
-1.  Use the embedded key to create a signed AWS API request to use as REST
-2.  AWS SDK `Credential` which uses the HMAC signer as a credential provider for any go SDK for AWS.
+1.  Create a raw Signed AWS Request to access via REST
+2.  Create an AWS SDK `Credential` which uses the HMAC signer as a credential provider for any go SDK for AWS.
 
 Basically, this repo provides an `AWS Credential` _and_ a `Signerv4`.   You can use the former for any sdk operation and the later for standalone REST calls to AWS.
 
@@ -47,7 +47,7 @@ AWS SDK's require an actual `AWS_SECRET_ACCESS_KEY` to perform its signature ope
 
 This makes it a bit complicated on how to use an embedded key for an SDK which never sees the light of day outside of an HSM.
 
-The workaround employed in this repo is a two step process to get a temp  `AWS_SECRET_ACCESS_KEY`:
+The workaround employed in this repo is a two step process to get a temporary  `AWS_SECRET_ACCESS_KEY` _derived_ from an initial Signerv4 request:
 
 1. use the HSM embedded HMAC key to generate an AWS API call for either:
 
