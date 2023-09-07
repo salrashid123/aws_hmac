@@ -54,7 +54,7 @@ The workaround employed in this repo is a two step process to get a temporary  `
   * [sts.GetSessionToken()](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetSessionToken.html)
   * [sts.AssumeRole()](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html)
 
-2. Both APIs below will return a new temporary `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and for the assumerole, a session.
+2. [Both APIs](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html#stsapi_comparison) below will return a new temporary `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and for the assumerole, a session.
 
 3. Use these new keys as inputs to AWS Clients though a custom Credential object from this repo.
 
