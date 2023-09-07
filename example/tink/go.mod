@@ -7,10 +7,10 @@ require (
 	github.com/golang/protobuf v1.5.3
 	github.com/google/tink/go v1.7.0
 	github.com/gorilla/schema v1.2.0
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
-	github.com/salrashid123/aws_hmac/tink v0.0.0-00010101000000-000000000000
-	github.com/salrashid123/aws_hmac/tink/signer v0.0.0
-	github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0
+// github.com/salrashid123/aws_hmac/stsschema v0.0.0
+// github.com/salrashid123/aws_hmac/tink v0.0.0-00010101000000-000000000000
+// github.com/salrashid123/aws_hmac/tink/signer v0.0.0
+// github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0
 )
 
 require (
@@ -20,6 +20,10 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030222-03be18507813 // indirect
+	github.com/salrashid123/aws_hmac/tink v0.0.0-20230907030222-03be18507813 // indirect
+	github.com/salrashid123/aws_hmac/tink/signer v0.0.0-20230907025004-21e21d0dabc4 // indirect
+	github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0-20230907025004-21e21d0dabc4 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/net v0.7.0 // indirect

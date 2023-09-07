@@ -188,6 +188,14 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030222-03be18507813 h1:BELrnA65d/xJWtp6iiMxswB4sG4gFJRT7RhMCJntnnU=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030222-03be18507813/go.mod h1:/JTINTWSeIL/gvkmlGh7O5+knoymbf0cSat/QDaTOC0=
+github.com/salrashid123/aws_hmac/tink v0.0.0-20230907030222-03be18507813 h1:2NxPvsLMv1+ATwqdlpTTZlrjAfWmdO5kcrnakgzzvuY=
+github.com/salrashid123/aws_hmac/tink v0.0.0-20230907030222-03be18507813/go.mod h1:oL5rbaMYYDQ3kMMeavMnNgGMmfRirtQzqcrc2YY3BPE=
+github.com/salrashid123/aws_hmac/tink/signer v0.0.0-20230907025004-21e21d0dabc4 h1:BM2RlRU6CQk59UQhoKezT7LwwfMtV+T7/74I1oCbFLE=
+github.com/salrashid123/aws_hmac/tink/signer v0.0.0-20230907025004-21e21d0dabc4/go.mod h1:STRtojh4SUzWjAhc3KaYK9ODuukHTE3a+mb4M8XrFV8=
+github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0-20230907025004-21e21d0dabc4 h1:Yk5uQVGSxbgVnn5lDdrFoPqAMjPmSSuC31i4oMnjztA=
+github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0-20230907025004-21e21d0dabc4/go.mod h1:frV1ZyNAWHe52wmFXP/BUThFXEkMAtkW7w9tWm/v+P4=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=

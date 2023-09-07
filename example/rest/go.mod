@@ -7,10 +7,14 @@ require (
 	github.com/golang/protobuf v1.5.3
 	github.com/google/tink/go v1.7.0
 	github.com/gorilla/schema v1.2.0
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
-	github.com/salrashid123/aws_hmac/tink v0.0.0-00010101000000-000000000000
-	github.com/salrashid123/aws_hmac/tink/signer v0.0.0
-	github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20230907030222-03be18507813
+	github.com/salrashid123/aws_hmac/tink v0.0.0-20230907030222-03be18507813
+	github.com/salrashid123/aws_hmac/tink/signer v0.0.0-20230907025004-21e21d0dabc4
+	github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0-20230907025004-21e21d0dabc4
+// github.com/salrashid123/aws_hmac/stsschema v0.0.0
+// github.com/salrashid123/aws_hmac/tink v0.0.0-00010101000000-000000000000
+// github.com/salrashid123/aws_hmac/tink/signer v0.0.0
+// github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0
 )
 
 require (
