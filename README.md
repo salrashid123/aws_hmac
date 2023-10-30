@@ -1,4 +1,4 @@
-## AWS SDK Credentials and Request Signing using Trusted Platform Modules (TPM), HSM, PKCS-11 and Vault
+## AWS Credentials for Hardware Security Modules and TPM based AWS_SECRET_ACCESS_KEY
 
 Sample procedure to **embed** AWS [Secret Access Keys](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) _inside_ an HSM device through [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11), [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module) and [Hashicorp Vault](https://www.vaultproject.io/).
 
@@ -19,6 +19,11 @@ This repo provides four ways to protect the aws secret:
   * `"github.com/salrashid123/aws_hmac/tink"`
 
 >> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
+
+---
+
+
+* For TPM based process credentials, see [AWS Process Credentials for Hardware Security Modules and TPM based AWS_SECRET_ACCESS_KEY](https://github.com/salrashid123/aws-tpm-process-credential)
 
 ---
 
@@ -186,6 +191,10 @@ You can do this directly on the TPM
 or remotely through a process like duplicate:
 
 - [Duplicate an externally loaded HMAC key](https://github.com/salrashid123/tpm2/tree/master/tpm2_duplicate#duplicate-an-externally-loaded-hmac-key)
+
+Please note the default signer here **requires** a persistentHandle.  If you would rather save/load from files, please file an issue (its relatively easy to adapt the import and signing), see
+
+* [tpm_hmac file import](https://github.com/salrashid123/tpm2/tree/master/hmac_import)
 
 #### Vault Usage Overview
 
