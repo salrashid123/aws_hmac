@@ -6,25 +6,22 @@ The critical feature is, once the `AWS_SECRET_ACCESS_KEY` checks in, it never ch
 
 This repo provides four ways to protect the aws secret:
 
-1. Embed the secret into an `HSM` an access it via `PKCS11` 
-  * `"github.com/salrashid123/aws_hmac/pkcs"`
+1. Embed the secret into an `HSM` an access it via `PKCS11` `"github.com/salrashid123/aws_hmac/pkcs"`
 
-2. Embed the secret into an `TPM` an access it via `go-tpm`  
-  * `"github.com/salrashid123/aws_hmac/tpm"`
+2. Embed the secret into an `TPM` an access it via `go-tpm`  `"github.com/salrashid123/aws_hmac/tpm"`
 
-3. Embed the secret into an `Vault` an access it via `Vault` APIs 
-  * `"github.com/salrashid123/aws_hmac/vault"`
+3. Embed the secret into an `Vault` an access it via `Vault` APIs `"github.com/salrashid123/aws_hmac/vault"`
 
-4. Wrap the secret using `KMS` and access it via `TINK`. 
-  * `"github.com/salrashid123/aws_hmac/tink"`
+4. Wrap the secret using `KMS` and access it via `TINK`. `"github.com/salrashid123/aws_hmac/tink"`
 
 >> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
 
 ---
 
 
-* For TPM based process credentials, see [AWS Process Credentials for Hardware Security Modules and TPM based AWS_SECRET_ACCESS_KEY](https://github.com/salrashid123/aws-tpm-process-credential)
-
+* For TPM based process credentials, see [AWS Process Credentials for Trusted Platform Module (TPM)](https://github.com/salrashid123/aws-tpm-process-credential)
+* For HSM based process credentials, see [AWS Process Credentials for Hardware Security Module (HSM) with PKCS11](https://github.com/salrashid123/aws-pkcs-process-credential)
+  
 ---
 
 ### AWS v4 Signing Protocol
