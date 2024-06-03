@@ -5,8 +5,8 @@ go 1.21
 require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.10
 	github.com/gorilla/schema v1.2.0
-	github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0
-	github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0
+	github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0-20240603113244-90c0fa02c6a3
+	github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3
 	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3
 )
 
@@ -18,10 +18,4 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.9 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/miekg/pkcs11 v1.1.1 // indirect
-)
-
-replace (
-	github.com/salrashid123/aws_hmac/pkcs/signer => ./signer
-	github.com/salrashid123/aws_hmac/pkcs/signer/v4 => ./signer/v4
-// github.com/salrashid123/aws_hmac/stsschema => ../stsschema
 )

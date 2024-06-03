@@ -6,8 +6,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.10
 	github.com/gorilla/schema v1.2.0
 	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3
-	github.com/salrashid123/aws_hmac/tink/signer v0.0.0
-	github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0
+	github.com/salrashid123/aws_hmac/tink/signer v0.0.0-20240603115806-b0a186b8b4b4
+	github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3
+
 )
 
 require (
@@ -20,10 +21,4 @@ require (
 	github.com/tink-crypto/tink-go/v2 v2.1.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
-)
-
-replace (
-	// github.com/salrashid123/aws_hmac/stsschema => ../stsschema
-	github.com/salrashid123/aws_hmac/tink/signer => ./signer
-	github.com/salrashid123/aws_hmac/tink/signer/v4 => ./signer/v4
 )

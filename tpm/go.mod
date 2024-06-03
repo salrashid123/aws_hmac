@@ -9,9 +9,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.10
 	github.com/gorilla/schema v1.3.0
 	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3
-	github.com/salrashid123/aws_hmac/tpm/signer v0.0.0
-	github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0
-
+	github.com/salrashid123/aws_hmac/tpm/signer v0.0.0-20240603115806-b0a186b8b4b4
+	github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3
 )
 
 require (
@@ -22,10 +21,4 @@ require (
 	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/google/go-tpm v0.9.1-0.20240514145214-58e3e47cd434 // indirect
 	golang.org/x/sys v0.20.0 // indirect
-)
-
-replace (
-	// github.com/salrashid123/aws_hmac/stsschema => ../stsschema
-	github.com/salrashid123/aws_hmac/tpm/signer => ./signer
-	github.com/salrashid123/aws_hmac/tpm/signer/v4 => ./signer/v4
 )
