@@ -8,11 +8,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.10
 	github.com/gorilla/schema v1.2.0
 	github.com/miekg/pkcs11 v1.1.1
-	github.com/salrashid123/aws_hmac/pkcs v0.0.0-00010101000000-000000000000
-	github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0
-	github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
-
 )
 
 require (
@@ -26,11 +21,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.20.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.3 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
-)
-
-replace (
-	github.com/salrashid123/aws_hmac/pkcs => ../../pkcs
-	github.com/salrashid123/aws_hmac/pkcs/signer => ../../pkcs/signer
-	github.com/salrashid123/aws_hmac/pkcs/signer/v4 => ../../pkcs/signer/v4
-	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
+	github.com/salrashid123/aws_hmac/pkcs v0.0.0-20240603121259-f254d7e77c0c // indirect
+	github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0-20240603113244-90c0fa02c6a3 // indirect
+	github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3 // indirect
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3 // indirect
 )
