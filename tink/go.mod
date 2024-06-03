@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.10
 	github.com/gorilla/schema v1.2.0
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3
 	github.com/salrashid123/aws_hmac/tink/signer v0.0.0
 	github.com/salrashid123/aws_hmac/tink/signer/v4 v4.0.0
 )
@@ -23,7 +23,7 @@ require (
 )
 
 replace (
-	github.com/salrashid123/aws_hmac/stsschema => ../stsschema
+	// github.com/salrashid123/aws_hmac/stsschema => ../stsschema
 	github.com/salrashid123/aws_hmac/tink/signer => ./signer
 	github.com/salrashid123/aws_hmac/tink/signer/v4 => ./signer/v4
 )

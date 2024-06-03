@@ -7,8 +7,7 @@ require (
 	github.com/gorilla/schema v1.2.0
 	github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0
 	github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
-
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3
 )
 
 require (
@@ -24,5 +23,5 @@ require (
 replace (
 	github.com/salrashid123/aws_hmac/pkcs/signer => ./signer
 	github.com/salrashid123/aws_hmac/pkcs/signer/v4 => ./signer/v4
-	github.com/salrashid123/aws_hmac/stsschema => ../stsschema
+// github.com/salrashid123/aws_hmac/stsschema => ../stsschema
 )
