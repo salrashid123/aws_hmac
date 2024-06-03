@@ -25,7 +25,7 @@ type CallerIdentityResult struct {
 type GetSessionTokenInput struct {
 	Action          string  `schema:"Action"`
 	Version         string  `schema:"Version"`
-	DurationSeconds *int64  `schema:"DurationSeconds,omitempty" min:"900" type:"integer"`
+	DurationSeconds *int32  `schema:"DurationSeconds,omitempty" min:"900" type:"integer"`
 	SerialNumber    *string `schema:"SerialNumber,omitempty" min:"9" type:"string"`
 	TokenCode       *string `schema:"TokenCode,omitempty" min:"6" type:"string"`
 	// cant use 	sts.GetSessionTokenInput because i can't omit nulls
@@ -70,7 +70,7 @@ type Tag struct {
 type AssumeRoleInput struct {
 	Action            string                  `schema:"Action"`
 	Version           string                  `schema:"Version"`
-	DurationSeconds   *int64                  `schema:"DurationSeconds,omitempty" min:"900" type:"integer"`
+	DurationSeconds   *int32                  `schema:"DurationSeconds,omitempty" min:"900" type:"integer"`
 	ExternalId        *string                 `schema:"ExternalId,omitempty" min:"2" type:"string"`
 	Policy            *string                 `schema:"Policy,omitempty" min:"1" type:"string"`
 	PolicyArns        []*PolicyDescriptorType `schema:"PolicyArns,omitempty" type:"list"`

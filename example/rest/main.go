@@ -17,29 +17,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/gorilla/schema"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/aws/aws-sdk-go-v2/credentials"
+
+	"github.com/gorilla/schema"
 
 	"flag"
 
 	"github.com/salrashid123/aws_hmac/stsschema"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/google/tink/go/core/registry"
-	"github.com/google/tink/go/integration/gcpkms"
-	"github.com/google/tink/go/keyset"
-	"github.com/google/tink/go/mac/subtle"
-	common_go_proto "github.com/google/tink/go/proto/common_go_proto"
-	hmacpb "github.com/google/tink/go/proto/hmac_go_proto"
-	tinkpb "github.com/google/tink/go/proto/tink_go_proto"
+	gcpkms "github.com/tink-crypto/tink-go-gcpkms/v2/integration/gcpkms"
+	"github.com/tink-crypto/tink-go/v2/keyset"
+	"github.com/tink-crypto/tink-go/v2/mac/subtle"
+	common_go_proto "github.com/tink-crypto/tink-go/v2/proto/common_go_proto"
+	hmacpb "github.com/tink-crypto/tink-go/v2/proto/hmac_go_proto"
+	tinkpb "github.com/tink-crypto/tink-go/v2/proto/tink_go_proto"
 
 	hmaccred "github.com/salrashid123/aws_hmac/tink"
 	hmacsigner "github.com/salrashid123/aws_hmac/tink/signer"
@@ -47,19 +46,6 @@ import (
 )
 
 const (
-	awsAlgorithm           = "AWS4-HMAC-SHA256"
-	awsRequestType         = "aws4_request"
-	awsSecurityTokenHeader = "x-amz-security-token"
-	awsDateHeader          = "x-amz-date"
-	awsTimeFormatLong      = "20060102T150405Z"
-	awsTimeFormatShort     = "20060102"
-
-	NonRawPrefixSize = 5
-	RawPrefixSize    = 0
-	TinkPrefixSize   = NonRawPrefixSize
-	TinkStartByte    = byte(1)
-	RawPrefix        = ""
-
 	tagSize = 32
 
 	// $ touch empty.txt
@@ -84,37 +70,6 @@ func main() {
 	if *accessKeyID == "" || *secretAccessKey == "" {
 		log.Fatal("accessKeyID and secretAccessKey must be set")
 	}
-
-	// // // **************  STS
-
-	log.Println("Using Default AWS v4Signer and StaticCredentials to make REST GET call to GetCallerIdentity")
-	creds := credentials.NewStaticCredentials(*accessKeyID, *secretAccessKey, "")
-	signer := v4.NewSigner(creds)
-	rbody := strings.NewReader("")
-	req, err := http.NewRequest(http.MethodGet, "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15", rbody)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	_, err = signer.Sign(req, rbody, "sts", "us-east-1", time.Now())
-	if err != nil {
-		log.Fatalln(err)
-	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Fatalf("failed to call remote service: (%v)\n", err)
-	}
-
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		fmt.Printf("service returned a status not 200: (%d)\n", res.StatusCode)
-		//return
-	}
-	b, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Println(err)
-	}
-
-	log.Printf("   Response using AWS STS NewStaticCredentials and Standard v4.Singer \n%s", string(b))
 
 	// ***************************************************************************
 
@@ -169,13 +124,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Encrypt the serialized keyset with kms
-	gcpClient, err := gcpkms.NewClient("gcp-kms://")
+	ctx := context.Background()
+	gcpClient, err := gcpkms.NewClientWithOptions(ctx, "gcp-kms://")
 	if err != nil {
 		log.Fatal(err)
 	}
-	registry.RegisterKMSClient(gcpClient)
 
+	// Encrypt the serialized keyset with kms
 	backend, err := gcpClient.GetAEAD("gcp-kms://" + *keyURI)
 	if err != nil {
 		log.Printf("Could not acquire KMS Hmac %v", err)
@@ -235,8 +190,6 @@ func main() {
 
 	// ********************************************
 
-	ctx := context.Background()
-
 	tinkSigner, err := hmacsigner.NewTinkSigner(&hmacsigner.TinkSignerConfig{
 		TinkConfig: hmacsigner.TinkConfig{
 			KmsBackend: backend,
@@ -250,29 +203,31 @@ func main() {
 	hmacSigner := hmacsignerv4.NewSigner()
 
 	sessionCredentials, err := hmaccred.NewAWSTinkCredentials(hmaccred.TINKProvider{
-		GetSessionTokenInput: &stsschema.GetSessionTokenInput{
-			DurationSeconds: aws.Int64(3600),
+		GetSessionTokenInput: &sts.GetSessionTokenInput{
+			DurationSeconds: aws.Int32(3600),
 		},
 		Version:    "2011-06-15",
 		Region:     *awsRegion,
 		TinkSigner: tinkSigner,
 	})
 	if err != nil {
-		log.Fatalf("Could not initialize Tink Credentials %v", err)
+		fmt.Printf("Could not initialize TPM Credentials %v\n", err)
+		return
 	}
 
 	assumeRoleCredentials, err := hmaccred.NewAWSTinkCredentials(hmaccred.TINKProvider{
-		AssumeRoleInput: &stsschema.AssumeRoleInput{
+		AssumeRoleInput: &sts.AssumeRoleInput{
 			RoleArn:         aws.String(*roleARN),
 			RoleSessionName: aws.String(roleSessionName),
-			DurationSeconds: aws.Int64(3600),
+			DurationSeconds: aws.Int32(3600),
 		},
 		Version:    "2011-06-15",
 		Region:     *awsRegion,
 		TinkSigner: tinkSigner,
 	})
 	if err != nil {
-		log.Fatalf("Could not read response Body%v", err)
+		fmt.Printf("Could not read initialize TPM Credentials %v\n", err)
+		return
 	}
 	// *******************************************
 	fmt.Println("-------------------------------- Calling HTTP GET on  GetCallerIdentity using Tink Signer")
@@ -300,7 +255,7 @@ func main() {
 
 	var getCallerIdentityResponseStruct stsschema.GetCallerIdentityResponse
 
-	getResponseData, err := ioutil.ReadAll(getResponse.Body)
+	getResponseData, err := io.ReadAll(getResponse.Body)
 	if err != nil {
 		log.Fatalf("Could not read response Body%v", err)
 	}
@@ -365,13 +320,17 @@ func main() {
 
 	fmt.Println("-------------------------------- Calling  AWS SDK sts.GetCallerIdentity using Tink Signer")
 
-	sess, err := session.NewSession(&aws.Config{
-		Region:      aws.String(*awsRegion),
-		Credentials: sessionCredentials,
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(*awsRegion), config.WithCredentialsProvider(sessionCredentials))
+	if err != nil {
+		fmt.Printf("Could not read GetCallerIdentity response %v", err)
+		return
+	}
+
+	stssvc := sts.NewFromConfig(cfg, func(o *sts.Options) {
+		o.Region = *awsRegion
 	})
 
-	stssvc := sts.New(sess, aws.NewConfig().WithRegion(*awsRegion))
-	stsresp, err := stssvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	stsresp, err := stssvc.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
 		log.Fatalf("Could not read response Body%v", err)
 	}
@@ -419,15 +378,19 @@ func main() {
 	log.Println("Listing Buckets using s3 client library")
 
 	log.Println("-------------------------------- List buckets with NewStaticCredentials")
-	sess, err = session.NewSession(&aws.Config{
-		Region:      aws.String(*awsRegion),
-		Credentials: credentials.NewStaticCredentials(assumeRoleOutput.AssumeRoleResult.Credentials.AccessKeyId, assumeRoleOutput.AssumeRoleResult.Credentials.SecretAccessKey, assumeRoleOutput.AssumeRoleResult.Credentials.SessionToken),
+
+	sc := credentials.NewStaticCredentialsProvider(assumeRoleOutput.AssumeRoleResult.Credentials.AccessKeyId, assumeRoleOutput.AssumeRoleResult.Credentials.SecretAccessKey, assumeRoleOutput.AssumeRoleResult.Credentials.SessionToken)
+	s3cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(*awsRegion), config.WithCredentialsProvider(sc))
+	if err != nil {
+		fmt.Printf("Could not read GetCallerIdentity response %v", err)
+		return
+	}
+
+	s3svc := s3.NewFromConfig(s3cfg, func(o *s3.Options) {
+		o.Region = *awsRegion
 	})
-
-	s3svc := s3.New(sess, aws.NewConfig().WithRegion(*awsRegion))
 	input := &s3.ListBucketsInput{}
-
-	result, err := s3svc.ListBuckets(input)
+	result1, err := s3svc.ListBuckets(ctx, input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -441,72 +404,45 @@ func main() {
 		return
 	}
 
-	log.Println(result.Buckets)
+	log.Println(len(result1.Buckets))
 
 	// *********************************
 
 	fmt.Println("-------------------------------- Calling s3 list buckets using Tink Signer with AssumeRole")
 
-	sess2, err := session.NewSession(&aws.Config{
-		Region:      aws.String(*awsRegion),
-		Credentials: assumeRoleCredentials,
-	})
-
-	svc2 := s3.New(sess2, aws.NewConfig().WithRegion(*awsRegion))
-	input2 := &s3.ListBucketsInput{}
-
-	result2, err := svc2.ListBuckets(input2)
+	s3cfg2, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(*awsRegion), config.WithCredentialsProvider(assumeRoleCredentials))
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-
-			fmt.Println(err.Error())
-		}
+		fmt.Printf("Could not read GetCallerIdentity response %v", err)
 		return
 	}
-	log.Println(result2.Buckets)
+
+	s3svc2 := s3.NewFromConfig(s3cfg2, func(o *s3.Options) {
+		o.Region = *awsRegion
+	})
+
+	result2, err := s3svc2.ListBuckets(ctx, input)
+	if err != nil {
+		fmt.Printf("Could not reading bucket response %v", err)
+		return
+	}
+	log.Println(len(result2.Buckets))
 
 	fmt.Println("-------------------------------- Calling s3 list buckets using Tink Signer with GetSessionTOken")
 
-	sess, err = session.NewSession(&aws.Config{
-		Region:      aws.String(*awsRegion),
-		Credentials: sessionCredentials,
-	})
-
-	s3svc = s3.New(sess, aws.NewConfig().WithRegion(*awsRegion))
-	listBucketInput := &s3.ListBucketsInput{}
-
-	listBucketResult, err := s3svc.ListBuckets(listBucketInput)
+	s3cfg3, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(*awsRegion), config.WithCredentialsProvider(sessionCredentials))
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-
-			fmt.Println(err.Error())
-		}
+		fmt.Printf("Could not read GetCallerIdentity response %v", err)
 		return
 	}
-	log.Println(listBucketResult.Buckets)
 
-	fmt.Println("-------------------------------- Calling ec2 list regions using Tink Signer with AssumeRole")
-	sess, err = session.NewSession(&aws.Config{
-		Region:      aws.String(*awsRegion),
-		Credentials: assumeRoleCredentials,
+	s3svc3 := s3.NewFromConfig(s3cfg3, func(o *s3.Options) {
+		o.Region = *awsRegion
 	})
-
-	ec2svc := ec2.New(sess, aws.NewConfig().WithRegion(*awsRegion))
-	regions, err := ec2svc.DescribeRegions(&ec2.DescribeRegionsInput{})
+	result3, err := s3svc3.ListBuckets(ctx, input)
 	if err != nil {
-		log.Fatalf("Could not read response Body%v", err)
+		fmt.Printf("Could not reading bucket response %v", err)
+		return
 	}
-
-	log.Printf("Region count %d\n", len(regions.Regions))
+	log.Println(len(result3.Buckets))
 
 }

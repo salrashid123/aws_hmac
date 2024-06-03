@@ -7,18 +7,21 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/gorilla/schema"
+
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+
 	stsschema "github.com/salrashid123/aws_hmac/stsschema"
 	hmacsigner "github.com/salrashid123/aws_hmac/tpm/signer"
 	hmacsignerv4 "github.com/salrashid123/aws_hmac/tpm/signer/v4"
-
-	creds "github.com/aws/aws-sdk-go/aws/credentials"
 )
 
 const (
@@ -32,87 +35,108 @@ const (
 var ()
 
 type TPMProvider struct {
-	AssumeRoleInput      *stsschema.AssumeRoleInput
+	AssumeRoleInput      *sts.AssumeRoleInput
 	TPMSigner            *hmacsigner.TPMSigner
-	GetSessionTokenInput *stsschema.GetSessionTokenInput
+	GetSessionTokenInput *sts.GetSessionTokenInput
 	Version              string
 	Region               string
+}
+
+type TPMCredentialsProvider struct {
+	assumeRoleInput      *sts.AssumeRoleInput
+	tpmSigner            *hmacsigner.TPMSigner
+	getSessionTokenInput *sts.GetSessionTokenInput
+	version              string
+	region               string
 	expiration           time.Time
 }
 
-func NewAWSTPMCredentials(cfg TPMProvider) (*creds.Credentials, error) {
+func NewAWSTPMCredentials(cfg TPMProvider) (*TPMCredentialsProvider, error) {
 	if cfg.AssumeRoleInput == nil && cfg.GetSessionTokenInput == nil {
-		return nil, errors.New("error either AssumeRoleInput or GetSessionTokenInput must be set")
+		return &TPMCredentialsProvider{}, errors.New("error either AssumeRoleInput or GetSessionTokenInput must be set")
 	}
 	if cfg.Region == "" {
-		return nil, errors.New("error Region must be set")
+		return &TPMCredentialsProvider{}, errors.New("error Region must be set")
 	}
 	if cfg.Version == "" {
 		cfg.Version = defaultVersion
 	}
-	return creds.NewCredentials(&cfg), nil
+
+	return &TPMCredentialsProvider{
+		assumeRoleInput:      cfg.AssumeRoleInput,
+		tpmSigner:            cfg.TPMSigner,
+		getSessionTokenInput: cfg.GetSessionTokenInput,
+		version:              cfg.Version,
+		region:               cfg.Region,
+	}, nil
 }
 
-func (s *TPMProvider) Retrieve() (creds.Value, error) {
+func (s *TPMCredentialsProvider) Retrieve(ctx context.Context) (aws.Credentials, error) {
 
-	var v creds.Value
-	if s.AssumeRoleInput != nil {
+	var v aws.Credentials
+	if s.assumeRoleInput != nil {
 
-		s.AssumeRoleInput.Action = "AssumeRole"
-		s.AssumeRoleInput.Version = defaultVersion
+		al := stsschema.AssumeRoleInput{
+			Action:          "AssumeRole",
+			Version:         defaultVersion,
+			DurationSeconds: s.assumeRoleInput.DurationSeconds,
+			RoleArn:         s.assumeRoleInput.RoleArn,
+			RoleSessionName: s.assumeRoleInput.RoleSessionName,
+		}
 
 		form := url.Values{}
 
-		err := schema.NewEncoder().Encode(s, form)
+		err := schema.NewEncoder().Encode(al, form)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq, err := http.NewRequest(http.MethodPost, stsEndpoint, strings.NewReader(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 		hasher := sha256.New()
 		_, err = hasher.Write([]byte(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		postPayloadHash := hex.EncodeToString(hasher.Sum(nil))
 		ctx := context.Background()
 		hsa := hmacsignerv4.NewSigner()
 
-		err = hsa.SignHTTP(ctx, *s.TPMSigner, sreq, postPayloadHash, "sts", s.Region, time.Now())
+		err = hsa.SignHTTP(ctx, *s.tpmSigner, sreq, postPayloadHash, "sts", s.region, time.Now())
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		sres, err := http.DefaultClient.Do(sreq)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		defer sres.Body.Close()
 		if sres.StatusCode != 200 {
-			data, err := ioutil.ReadAll(sres.Body)
+			data, err := io.ReadAll(sres.Body)
 			if err != nil {
-				return creds.Value{}, err
+				return aws.Credentials{}, err
 			}
-			return creds.Value{}, fmt.Errorf("Error requesting credentials %s\n", data)
+			return aws.Credentials{}, fmt.Errorf("error requesting credentials %s\n", data)
 		}
 
 		var stsOutput stsschema.AssumeRoleResponse
 
-		data, err := ioutil.ReadAll(sres.Body)
+		data, err := io.ReadAll(sres.Body)
 		if err != nil {
-			return creds.Value{}, err
-		}
-		err = xml.Unmarshal(data, &stsOutput)
-		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
-		v = creds.Value{
+		err = xml.Unmarshal(data, &stsOutput)
+		if err != nil {
+			return aws.Credentials{}, err
+		}
+
+		v = aws.Credentials{
 			AccessKeyID:     stsOutput.AssumeRoleResult.Credentials.AccessKeyId,
 			SecretAccessKey: stsOutput.AssumeRoleResult.Credentials.SecretAccessKey,
 			SessionToken:    stsOutput.AssumeRoleResult.Credentials.SessionToken,
@@ -121,62 +145,67 @@ func (s *TPMProvider) Retrieve() (creds.Value, error) {
 		s.expiration = stsOutput.AssumeRoleResult.Credentials.Expiration
 	}
 
-	if s.GetSessionTokenInput != nil {
+	if s.getSessionTokenInput != nil {
 
-		s.GetSessionTokenInput.Action = "GetSessionToken"
-		s.GetSessionTokenInput.Version = defaultVersion
+		sl := stsschema.GetSessionTokenInput{
+			Action:          "GetSessionToken",
+			Version:         defaultVersion,
+			DurationSeconds: s.getSessionTokenInput.DurationSeconds,
+		}
+
 		form := url.Values{}
 
-		err := schema.NewEncoder().Encode(s, form)
+		err := schema.NewEncoder().Encode(sl, form)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq, err := http.NewRequest(http.MethodPost, stsEndpoint, strings.NewReader(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 		hasher := sha256.New()
 		_, err = hasher.Write([]byte(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		postPayloadHash := hex.EncodeToString(hasher.Sum(nil))
 		ctx := context.Background()
 		hsa := hmacsignerv4.NewSigner()
 
-		err = hsa.SignHTTP(ctx, *s.TPMSigner, sreq, postPayloadHash, "sts", s.Region, time.Now())
+		err = hsa.SignHTTP(ctx, *s.tpmSigner, sreq, postPayloadHash, "sts", s.region, time.Now())
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		sres, err := http.DefaultClient.Do(sreq)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		defer sres.Body.Close()
 		if sres.StatusCode != 200 {
-			data, err := ioutil.ReadAll(sres.Body)
+			data, err := io.ReadAll(sres.Body)
 			if err != nil {
-				return creds.Value{}, err
+				return aws.Credentials{}, err
 			}
-			return creds.Value{}, fmt.Errorf("Error requesting credentials %s\n", data)
+			return aws.Credentials{}, fmt.Errorf("error requesting credentials %s\n", data)
 		}
 
 		var stsOutput stsschema.GetSessionTokenResponse
 
-		data, err := ioutil.ReadAll(sres.Body)
+		data, err := io.ReadAll(sres.Body)
 		if err != nil {
-			return creds.Value{}, err
-		}
-		err = xml.Unmarshal(data, &stsOutput)
-		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
-		v = creds.Value{
+		err = xml.Unmarshal(data, &stsOutput)
+		if err != nil {
+			return aws.Credentials{}, err
+		}
+
+		v = aws.Credentials{
 			AccessKeyID:     stsOutput.SessionTokenResult.Credentials.AccessKeyId,
 			SecretAccessKey: stsOutput.SessionTokenResult.Credentials.SecretAccessKey,
 			SessionToken:    stsOutput.SessionTokenResult.Credentials.SessionToken,
@@ -185,20 +214,20 @@ func (s *TPMProvider) Retrieve() (creds.Value, error) {
 		s.expiration = stsOutput.SessionTokenResult.Credentials.Expiration
 	}
 
-	if v.ProviderName == "" {
-		v.ProviderName = TPMProviderName
+	if v.Source == "" {
+		v.Source = TPMProviderName
 	}
 
 	return v, nil
 }
 
-func (s *TPMProvider) IsExpired() bool {
+func (s *TPMCredentialsProvider) IsExpired() bool {
 	if time.Now().Add(time.Second * time.Duration(refreshTolerance)).After(s.expiration) {
 		return true
 	}
 	return false
 }
 
-func (s *TPMProvider) ExpiresAt() time.Time {
+func (s *TPMCredentialsProvider) ExpiresAt() time.Time {
 	return s.expiration
 }

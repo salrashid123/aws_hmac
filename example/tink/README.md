@@ -3,7 +3,10 @@
 
 To use TINK, we will assume you are a GCP customer with access to GCP KMS and want to access AWS via v4 Signing
 
+
 First create a KMS keychain,key for Symmetric Encryption:
+
+### Create Keyset:
 
 ```bash
 export PROJECT_ID=`gcloud config get-value core/project`
@@ -24,50 +27,47 @@ gcloud kms keys add-iam-policy-binding key1 \
     --role roles/cloudkms.cryptoKeyDecrypter
 ```
 
-Now create an EncryptedKeySet with Tink, then read in that KeySet and make Tink generate an HMAC signature:
+Now create an EncryptedKeySet with Tink
 
 ```bash
 export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKERNFQLHJ
 export AWS_SECRET_ACCESS_KEY=YRJ86SK5qTOZQzZTI1u-redacted
 
-$ go run main.go   \
+$ go run create/main.go   \
    --keyURI "projects/$PROJECT_ID/locations/$LOCATION/keyRings/mykeyring/cryptoKeys/key1" \
-   --awsRegion=us-east-1 -accessKeyID $AWS_ACCESS_KEY_ID   -secretAccessKey $AWS_SECRET_ACCESS_KEY 
+    -accessKeyID $AWS_ACCESS_KEY_ID   -secretAccessKey $AWS_SECRET_ACCESS_KEY 
 
-2023/09/06 18:06:11 Using Default AWS v4Signer and StaticCredentials to make REST GET call to GetCallerIdentity
-2023/09/06 18:06:11    Response using AWS STS NewStaticCredentials and Standard v4.Singer 
-<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
-  <GetCallerIdentityResult>
-    <Arn>arn:aws:iam::291738886548:user/svcacct1</Arn>
-    <UserId>AIDAUH3H6EGKDO36JYJH3</UserId>
-    <Account>291738886548</Account>
-  </GetCallerIdentityResult>
-  <ResponseMetadata>
-    <RequestId>b3d47e61-0953-4286-8257-ac8c782e0bd5</RequestId>
-  </ResponseMetadata>
-</GetCallerIdentityResponse>
 
-2023/09/06 18:06:11    Initializing GCP KMS Encrypted Tink Keyset embedding AWS Secret
-2023/09/06 18:06:12    Tink Keyset:
- {
-	"encryptedKeyset": "CiQASRStDN8qoTkHO1NI1C5kS1E/g0bKRHZt8z43HM//St+sIHISpQEASMovZ7YafWaOTK9MlTyuBonbM0sGcL4wbPPa5w9wX9mX5jtNGAq/sUI0D6s1C5CQwseJSOwbJ343dQrI4Y9tWWvmrZ5LM9xcy1Md50GBoHBJGiJgKaFWlvT6ALArDuXtFc6s+W8bbrqSHmCa9GbgtGjS0Zo6huc8nFMrIC+v85TN4+DPyhLSctrIsW2HW7IDbw/8Ad0S1t3wKcQvwVw23k/LELs=",
+$ cat key.json 
+{
+	"encryptedKeyset": "CiQAK3qMTvWOyFMfxuwp1F51gsw2IhKL+Ik3LbpGLh4kGnxD2M0SpQEA19oTT/8fQWj1EatySJyPea+B8BVmsfGL3hZaccIFRU4QsSAA9AVpqmQLa0TNr8MObU0gu6jG0AfgHEk4LKzQL8T3yAcdRpMxD2JBCB95k4y0rmc7FRKA1VLFoUNPMLDT4qfqxnQBOo5U+o94UUY+iD3hKTA4oc79BhSwP7rF9VxNkc00fLZuWO3nlYM7UbtlwKYCfTpdlEr32WRzCVRvir8g+UU=",
 	"keysetInfo": {
-		"primaryKeyId": 488738866,
+		"primaryKeyId": 1541495373,
 		"keyInfo": [
 			{
 				"typeUrl": "type.googleapis.com/google.crypto.tink.HmacKey",
 				"status": "ENABLED",
-				"keyId": 488738866,
+				"keyId": 1541495373,
 				"outputPrefixType": "RAW"
 			}
 		]
 	}
 }
--------------------------------- Calling HTTP POST on  GetCallerIdentity using Tink Signer
-2023/09/06 18:06:12 GetCallerIdentityResponse UserID AIDAUH3H6EGKDO36JYJH3
--------------------------------- GetCallerIdentity with SessionToken SDK
-2023/09/06 18:06:12 STS Identity from API AIDAUH3H6EGKDO36JYJH3
--------------------------------- GetCallerIdentity with AssumeRole SDK
-2023/09/06 18:06:12 Assumed role ARN: arn:aws:sts::291738886548:assumed-role/gcpsts/mysession
 
 ```
+
+### Run AWS Client
+
+```bash
+go run load/main.go --in key.json --keyURI "projects/$PROJECT_ID/locations/$LOCATION/keyRings/mykeyring/cryptoKeys/key1"  \
+     --accessKeyID=$AWS_ACCESS_KEY_ID --roleARN="arn:aws:iam::291738886548:role/gcpsts"
+
+-------------------------------- Calling HTTP POST on  GetCallerIdentity using Tink Signer
+GetCallerIdentityResponse UserID AIDAUH3H6EGKDO36JYJH3
+-------------------------------- GetCallerIdentity with SessionToken SDK
+STS Identity from API AIDAUH3H6EGKDO36JYJH3
+-------------------------------- GetCallerIdentity with AssumeRole SDK
+Assumed role ARN: arn:aws:sts::291738886548:assumed-role/gcpsts/mysession
+```
+
+also see: [Import and use an external HMAC Key as KMS EncryptedKeySet](https://github.com/salrashid123/tink_samples/tree/main/external_hmac)

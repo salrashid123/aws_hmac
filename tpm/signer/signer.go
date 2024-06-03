@@ -5,18 +5,20 @@
 package signer
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"sync"
 
-	"github.com/google/go-tpm/legacy/tpm2"
-	"github.com/google/go-tpm/tpmutil"
+	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/tpm2/transport"
 )
 
 type TPMConfig struct {
-	TPMDevice io.ReadWriteCloser
-	TpmHandle tpmutil.Handle
+	TPMDevice        io.ReadWriteCloser
+	AuthHandle       tpm2.AuthHandle
+	Auth             tpm2.TPM2BAuth
+	EncryptionHandle tpm2.TPMHandle   // (optional) handle to use for transit encryption
+	EncryptionPub    *tpm2.TPMTPublic // (optional) public key to use for transit encryption
 }
 
 type TPMSignerConfig struct {
@@ -26,29 +28,32 @@ type TPMSignerConfig struct {
 }
 
 type TPMSigner struct {
-	refreshMutex *sync.Mutex
-	TPMConfig    TPMConfig
-	AccessKeyID  string
-	SessionToken string
+	refreshMutex     *sync.Mutex
+	TPMConfig        TPMConfig
+	AccessKeyID      string
+	SessionToken     string
+	encryptionHandle tpm2.TPMHandle
+	encryptionPub    *tpm2.TPMTPublic
 }
 
 const (
-	emptyPassword                 = ""
-	CmdHmacStart  tpmutil.Command = 0x0000015B
+	maxInputBuffer = 1024
 )
 
 var ()
 
 func NewTPMSigner(cfg *TPMSignerConfig) (*TPMSigner, error) {
 
-	if cfg.TPMConfig.TPMDevice == nil { //|| cfg.TPMConfig.TpmHandle == nil {
+	if cfg.TPMConfig.TPMDevice == nil {
 		return nil, fmt.Errorf("TpmDevice and TpmHandle must be specified")
 	}
 	return &TPMSigner{
-		refreshMutex: &sync.Mutex{},
-		TPMConfig:    cfg.TPMConfig,
-		AccessKeyID:  cfg.AccessKeyID,
-		SessionToken: cfg.SessionToken,
+		refreshMutex:     &sync.Mutex{},
+		TPMConfig:        cfg.TPMConfig,
+		AccessKeyID:      cfg.AccessKeyID,
+		SessionToken:     cfg.SessionToken,
+		encryptionHandle: cfg.TPMConfig.EncryptionHandle,
+		encryptionPub:    cfg.TPMConfig.EncryptionPub,
 	}, nil
 }
 
@@ -57,117 +62,62 @@ func (ts *TPMSigner) MAC(msg []byte) ([]byte, error) {
 	ts.refreshMutex.Lock()
 	defer ts.refreshMutex.Unlock()
 
-	newHandle := ts.TPMConfig.TpmHandle
-
-	maxDigestBuffer := 1024
-	seqAuth := ""
-	seq, err := HmacStart(ts.TPMConfig.TPMDevice, seqAuth, newHandle, tpm2.AlgSHA256)
-	if err != nil {
-		return []byte(""), err
-	}
-	defer tpm2.FlushContext(ts.TPMConfig.TPMDevice, seq)
-
-	plain := []byte(msg)
-	for len(plain) > maxDigestBuffer {
-		if err = tpm2.SequenceUpdate(ts.TPMConfig.TPMDevice, seqAuth, seq, plain[:maxDigestBuffer]); err != nil {
-			return []byte(""), err
-		}
-		plain = plain[maxDigestBuffer:]
-	}
-
-	digest, _, err := tpm2.SequenceComplete(ts.TPMConfig.TPMDevice, seqAuth, seq, tpm2.HandleNull, plain)
-	if err != nil {
-		return []byte(""), err
-	}
-
-	return digest, nil
-
+	rwr := transport.FromReadWriter(ts.TPMConfig.TPMDevice)
+	return ts.hmac(rwr, msg, ts.TPMConfig.AuthHandle, ts.TPMConfig.Auth)
 }
 
-//  ***********************************************************************
-// modified from from go-tpm/tpm2/tpm2.go
-// 	CmdHmacStart                  tpmutil.Command = 0x0000015B
+func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objAuthHandle tpm2.AuthHandle, objAuth tpm2.TPM2BAuth) ([]byte, error) {
 
-func encodeAuthArea(sections ...tpm2.AuthCommand) ([]byte, error) {
-	var res tpmutil.RawBytes
-	for _, s := range sections {
-		buf, err := tpmutil.Pack(s)
+	hmacStart := tpm2.HmacStart{
+		Handle:  objAuthHandle,
+		Auth:    objAuth,
+		HashAlg: tpm2.TPMAlgNull,
+	}
+
+	var rsess tpm2.Session
+	if ts.encryptionHandle != 0 && ts.encryptionPub != nil {
+		rsess = tpm2.HMAC(tpm2.TPMAlgSHA256, 16, tpm2.AESEncryption(128, tpm2.EncryptIn), tpm2.Salted(ts.encryptionHandle, *ts.encryptionPub))
+	} else {
+		rsess = tpm2.HMAC(tpm2.TPMAlgSHA256, 16, tpm2.AESEncryption(128, tpm2.EncryptIn))
+	}
+
+	rspHS, err := hmacStart.Execute(rwr, rsess)
+	if err != nil {
+		return nil, err
+	}
+
+	authHandle := tpm2.AuthHandle{
+		Name:   objAuthHandle.Name,
+		Handle: rspHS.SequenceHandle,
+		Auth:   tpm2.PasswordAuth(objAuth.Buffer),
+	}
+	for len(data) > maxInputBuffer {
+		sequenceUpdate := tpm2.SequenceUpdate{
+			SequenceHandle: authHandle,
+			Buffer: tpm2.TPM2BMaxBuffer{
+				Buffer: data[:maxInputBuffer],
+			},
+		}
+		_, err = sequenceUpdate.Execute(rwr)
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, buf...)
+		data = data[maxInputBuffer:]
 	}
 
-	size, err := tpmutil.Pack(uint32(len(res)))
+	sequenceComplete := tpm2.SequenceComplete{
+		SequenceHandle: authHandle,
+		Buffer: tpm2.TPM2BMaxBuffer{
+			Buffer: data,
+		},
+		Hierarchy: tpm2.TPMRHOwner,
+	}
+
+	rspSC, err := sequenceComplete.Execute(rwr)
 	if err != nil {
 		return nil, err
 	}
 
-	return concat(size, res)
-}
+	return rspSC.Result.Buffer, nil
 
-func HmacStart(rw io.ReadWriter, sequenceAuth string, handle tpmutil.Handle, hashAlg tpm2.Algorithm) (seqHandle tpmutil.Handle, err error) {
-
-	auth, err := encodeAuthArea(tpm2.AuthCommand{Session: tpm2.HandlePasswordSession, Attributes: tpm2.AttrContinueSession, Auth: []byte(sequenceAuth)})
-	if err != nil {
-		return 0, err
-	}
-	out, err := tpmutil.Pack(handle)
-	if err != nil {
-		return 0, err
-	}
-	Cmd, err := concat(out, auth)
-	if err != nil {
-		return 0, err
-	}
-
-	resp, err := runCommand(rw, tpm2.TagSessions, CmdHmacStart, tpmutil.RawBytes(Cmd), tpmutil.U16Bytes(sequenceAuth), hashAlg)
-	if err != nil {
-		return 0, err
-	}
-	var rhandle tpmutil.Handle
-	_, err = tpmutil.Unpack(resp, &rhandle)
-	return rhandle, err
-}
-
-func runCommand(rw io.ReadWriter, tag tpmutil.Tag, Cmd tpmutil.Command, in ...interface{}) ([]byte, error) {
-	resp, code, err := tpmutil.RunCommand(rw, tag, Cmd, in...)
-	if err != nil {
-		return nil, err
-	}
-	if code != tpmutil.RCSuccess {
-		return nil, decodeResponse(code)
-	}
-	return resp, decodeResponse(code)
-}
-
-func concat(chunks ...[]byte) ([]byte, error) {
-	return bytes.Join(chunks, nil), nil
-}
-
-func decodeResponse(code tpmutil.ResponseCode) error {
-	if code == tpmutil.RCSuccess {
-		return nil
-	}
-	if code&0x180 == 0 { // Bits 7:8 == 0 is a TPM1 error
-		return fmt.Errorf("response status 0x%x", code)
-	}
-	if code&0x80 == 0 { // Bit 7 unset
-		if code&0x400 > 0 { // Bit 10 set, vendor specific code
-			return tpm2.VendorError{uint32(code)}
-		}
-		if code&0x800 > 0 { // Bit 11 set, warning with code in bit 0:6
-			return tpm2.Warning{tpm2.RCWarn(code & 0x7f)}
-		}
-		// error with code in bit 0:6
-		return tpm2.Error{tpm2.RCFmt0(code & 0x7f)}
-	}
-	if code&0x40 > 0 { // Bit 6 set, code in 0:5, parameter number in 8:11
-		return tpm2.ParameterError{tpm2.RCFmt1(code & 0x3f), tpm2.RCIndex((code & 0xf00) >> 8)}
-	}
-	if code&0x800 == 0 { // Bit 11 unset, code in 0:5, handle in 8:10
-		return tpm2.HandleError{tpm2.RCFmt1(code & 0x3f), tpm2.RCIndex((code & 0x700) >> 8)}
-	}
-	// Code in 0:5, Session in 8:10
-	return tpm2.SessionError{tpm2.RCFmt1(code & 0x3f), tpm2.RCIndex((code & 0x700) >> 8)}
 }

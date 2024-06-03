@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -18,7 +19,8 @@ import (
 	hmacsignerv4 "github.com/salrashid123/aws_hmac/pkcs/signer/v4"
 	stsschema "github.com/salrashid123/aws_hmac/stsschema"
 
-	creds "github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 const (
@@ -32,15 +34,26 @@ const (
 var ()
 
 type PKCSProvider struct {
-	AssumeRoleInput      *stsschema.AssumeRoleInput
+	AssumeRoleInput      *sts.AssumeRoleInput
 	PKCSSigner           *hmacsigner.PKCSSigner
-	GetSessionTokenInput *stsschema.GetSessionTokenInput
-	Version              string
-	Region               string
+	GetSessionTokenInput *sts.GetSessionTokenInput
+
+	Version    string
+	Region     string
+	expiration time.Time
+}
+
+type PKCSCredentialsProvider struct {
+	assumeRoleInput      *sts.AssumeRoleInput
+	pkcsSigner           *hmacsigner.PKCSSigner
+	getSessionTokenInput *sts.GetSessionTokenInput
+	version              string
+	region               string
 	expiration           time.Time
 }
 
-func NewAWSPKCSCredentials(cfg PKCSProvider) (*creds.Credentials, error) {
+func NewAWSPKCSCredentials(cfg PKCSProvider) (*PKCSCredentialsProvider, error) {
+
 	if cfg.AssumeRoleInput == nil && cfg.GetSessionTokenInput == nil {
 		return nil, errors.New("error either AssumeRoleInput or GetSessionTokenInput must be set")
 	}
@@ -50,69 +63,80 @@ func NewAWSPKCSCredentials(cfg PKCSProvider) (*creds.Credentials, error) {
 	if cfg.Version == "" {
 		cfg.Version = defaultVersion
 	}
-	return creds.NewCredentials(&cfg), nil
+	return &PKCSCredentialsProvider{
+		assumeRoleInput:      cfg.AssumeRoleInput,
+		pkcsSigner:           cfg.PKCSSigner,
+		getSessionTokenInput: cfg.GetSessionTokenInput,
+		version:              cfg.Version,
+		region:               cfg.Region,
+	}, nil
+
 }
 
-func (s *PKCSProvider) Retrieve() (creds.Value, error) {
+func (s *PKCSCredentialsProvider) Retrieve(ctx context.Context) (aws.Credentials, error) {
 
-	var v creds.Value
-	if s.AssumeRoleInput != nil {
+	var v aws.Credentials
+	if s.assumeRoleInput != nil {
 
-		s.AssumeRoleInput.Action = "AssumeRole"
-		s.AssumeRoleInput.Version = defaultVersion
-
+		al := stsschema.AssumeRoleInput{
+			Action:          "AssumeRole",
+			Version:         defaultVersion,
+			DurationSeconds: s.assumeRoleInput.DurationSeconds,
+			RoleArn:         s.assumeRoleInput.RoleArn,
+			RoleSessionName: s.assumeRoleInput.RoleSessionName,
+		}
 		form := url.Values{}
 
-		err := schema.NewEncoder().Encode(s, form)
+		err := schema.NewEncoder().Encode(al, form)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq, err := http.NewRequest(http.MethodPost, stsEndpoint, strings.NewReader(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 		hasher := sha256.New()
 		_, err = hasher.Write([]byte(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		postPayloadHash := hex.EncodeToString(hasher.Sum(nil))
 		ctx := context.Background()
 		hsa := hmacsignerv4.NewSigner()
 
-		err = hsa.SignHTTP(ctx, *s.PKCSSigner, sreq, postPayloadHash, "sts", s.Region, time.Now())
+		err = hsa.SignHTTP(ctx, *s.pkcsSigner, sreq, postPayloadHash, "sts", s.region, time.Now())
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		sres, err := http.DefaultClient.Do(sreq)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		defer sres.Body.Close()
 		if sres.StatusCode != 200 {
 			data, err := ioutil.ReadAll(sres.Body)
 			if err != nil {
-				return creds.Value{}, err
+				return aws.Credentials{}, err
 			}
-			return creds.Value{}, fmt.Errorf("Error requesting credentials %s\n", data)
+			return aws.Credentials{}, fmt.Errorf("Error requesting credentials %s\n", data)
 		}
 
 		var stsOutput stsschema.AssumeRoleResponse
 
 		data, err := ioutil.ReadAll(sres.Body)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		err = xml.Unmarshal(data, &stsOutput)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
-		v = creds.Value{
+		v = aws.Credentials{
 			AccessKeyID:     stsOutput.AssumeRoleResult.Credentials.AccessKeyId,
 			SecretAccessKey: stsOutput.AssumeRoleResult.Credentials.SecretAccessKey,
 			SessionToken:    stsOutput.AssumeRoleResult.Credentials.SessionToken,
@@ -121,62 +145,66 @@ func (s *PKCSProvider) Retrieve() (creds.Value, error) {
 		s.expiration = stsOutput.AssumeRoleResult.Credentials.Expiration
 	}
 
-	if s.GetSessionTokenInput != nil {
+	if s.getSessionTokenInput != nil {
 
-		s.GetSessionTokenInput.Action = "GetSessionToken"
-		s.GetSessionTokenInput.Version = defaultVersion
+		sl := stsschema.GetSessionTokenInput{
+			Action:          "GetSessionToken",
+			Version:         defaultVersion,
+			DurationSeconds: s.getSessionTokenInput.DurationSeconds,
+		}
+
 		form := url.Values{}
 
-		err := schema.NewEncoder().Encode(s, form)
+		err := schema.NewEncoder().Encode(sl, form)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq, err := http.NewRequest(http.MethodPost, stsEndpoint, strings.NewReader(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		sreq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 		hasher := sha256.New()
 		_, err = hasher.Write([]byte(form.Encode()))
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		postPayloadHash := hex.EncodeToString(hasher.Sum(nil))
 		ctx := context.Background()
 		hsa := hmacsignerv4.NewSigner()
 
-		err = hsa.SignHTTP(ctx, *s.PKCSSigner, sreq, postPayloadHash, "sts", s.Region, time.Now())
+		err = hsa.SignHTTP(ctx, *s.pkcsSigner, sreq, postPayloadHash, "sts", s.region, time.Now())
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		sres, err := http.DefaultClient.Do(sreq)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
 		defer sres.Body.Close()
 		if sres.StatusCode != 200 {
-			data, err := ioutil.ReadAll(sres.Body)
+			data, err := io.ReadAll(sres.Body)
 			if err != nil {
-				return creds.Value{}, err
+				return aws.Credentials{}, err
 			}
-			return creds.Value{}, fmt.Errorf("Error requesting credentials %s\n", data)
+			return aws.Credentials{}, fmt.Errorf("Error requesting credentials %s\n", data)
 		}
 
 		var stsOutput stsschema.GetSessionTokenResponse
 
-		data, err := ioutil.ReadAll(sres.Body)
+		data, err := io.ReadAll(sres.Body)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 		err = xml.Unmarshal(data, &stsOutput)
 		if err != nil {
-			return creds.Value{}, err
+			return aws.Credentials{}, err
 		}
 
-		v = creds.Value{
+		v = aws.Credentials{
 			AccessKeyID:     stsOutput.SessionTokenResult.Credentials.AccessKeyId,
 			SecretAccessKey: stsOutput.SessionTokenResult.Credentials.SecretAccessKey,
 			SessionToken:    stsOutput.SessionTokenResult.Credentials.SessionToken,
@@ -185,20 +213,20 @@ func (s *PKCSProvider) Retrieve() (creds.Value, error) {
 		s.expiration = stsOutput.SessionTokenResult.Credentials.Expiration
 	}
 
-	if v.ProviderName == "" {
-		v.ProviderName = PKCSProviderName
+	if v.Source == "" {
+		v.Source = PKCSProviderName
 	}
 
 	return v, nil
 }
 
-func (s *PKCSProvider) IsExpired() bool {
+func (s *PKCSCredentialsProvider) IsExpired() bool {
 	if time.Now().Add(time.Second * time.Duration(refreshTolerance)).After(s.expiration) {
 		return true
 	}
 	return false
 }
 
-func (s *PKCSProvider) ExpiresAt() time.Time {
+func (s *PKCSCredentialsProvider) ExpiresAt() time.Time {
 	return s.expiration
 }

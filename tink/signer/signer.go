@@ -10,9 +10,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/google/tink/go/keyset"
-	"github.com/google/tink/go/mac"
-	"github.com/google/tink/go/tink"
+	"github.com/tink-crypto/tink-go/v2/keyset"
+	"github.com/tink-crypto/tink-go/v2/mac"
+	"github.com/tink-crypto/tink-go/v2/tink"
 )
 
 type TinkConfig struct {

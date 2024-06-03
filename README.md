@@ -10,9 +10,7 @@ This repo provides four ways to protect the aws secret:
 
 2. Embed the secret into an `TPM` an access it via `go-tpm`  `"github.com/salrashid123/aws_hmac/tpm"`
 
-3. Embed the secret into an `Vault` an access it via `Vault` APIs `"github.com/salrashid123/aws_hmac/vault"`
-
-4. Wrap the secret using `KMS` and access it via `TINK`. `"github.com/salrashid123/aws_hmac/tink"`
+3. Wrap the secret using `KMS` and access it via `TINK`. `"github.com/salrashid123/aws_hmac/tink"`
 
 >> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
 
@@ -22,6 +20,14 @@ This repo provides four ways to protect the aws secret:
 * For TPM based process credentials, see [AWS Process Credentials for Trusted Platform Module (TPM)](https://github.com/salrashid123/aws-tpm-process-credential)
 * For HSM based process credentials, see [AWS Process Credentials for Hardware Security Module (HSM) with PKCS11](https://github.com/salrashid123/aws-pkcs-process-credential)
   
+
+For concrete usage see:
+
+- [example/tpm](example/tpm)
+- [example/pkcs](example/pkcs)
+- [example/rest](example/rest)
+- [example/tink](example/tink)
+
 ---
 
 ### AWS v4 Signing Protocol
@@ -70,15 +76,15 @@ You can find example README files for each mode under `example/` folder.
 
 ### Usage: Signer with HTTP POST
 
-You can use a signer to make an authenticate API call directly.  
+You can use a signer to make an authenticate API calls directly.  
 
 TO use this mode, initialize any of the HSM backends.  The following uses KMS and Tink to sign a REST API for `GetCallerIdentity` endpoint
 
 ```golang
 	tinkSigner, err := hmacsigner.NewTinkSigner(&hmacsigner.TinkSignerConfig{
 		TinkConfig: hmacsigner.TinkConfig{
-			KmsBackend: backend,             // kms reference which encrypts the tink key
-			JSONBytes:  prettyJSON.Bytes(),  // bytes for the encrypted TINK Key that holds the AWS Secret
+			KmsBackend: backend,
+			JSONBytes:  keysetbytes,    // this is the keyset bytes, i'm using json keyset
 		},
 		AccessKeyID: *accessKeyID,
 	})
@@ -94,9 +100,11 @@ TO use this mode, initialize any of the HSM backends.  The following uses KMS an
 
 	getResponse, err := http.DefaultClient.Do(getCallerIdentityRequest)
 
+	defer getResponse.Body.Close()
+
 	var getCallerIdentityResponseStruct stsschema.GetCallerIdentityResponse
 
-	getResponseData, err := ioutil.ReadAll(getResponse.Body)
+	getResponseData, err := io.ReadAll(getResponse.Body)
 
 	err = xml.Unmarshal(getResponseData, &getCallerIdentityResponseStruct)
 
@@ -107,18 +115,22 @@ TO use this mode, initialize any of the HSM backends.  The following uses KMS an
 ### Usage: AWS SDK Credentials from Signer 
 
 ```golang
+	// first read the keyset from disk
+	keysetbytes, err := os.ReadFile(*in)
+
 	tinkSigner, err := hmacsigner.NewTinkSigner(&hmacsigner.TinkSignerConfig{
 		TinkConfig: hmacsigner.TinkConfig{
 			KmsBackend: backend,
-			JSONBytes:  prettyJSON.Bytes(),
+			JSONBytes:  keysetbytes,
 		},
 		AccessKeyID: *accessKeyID,
 	})
+
 	hmacSigner := hmacsignerv4.NewSigner()
 
 	sessionCredentials, err := hmaccred.NewAWSTinkCredentials(hmaccred.TINKProvider{
-		GetSessionTokenInput: &stsschema.GetSessionTokenInput{
-			DurationSeconds: aws.Int64(3600),
+		GetSessionTokenInput: &sts.GetSessionTokenInput{
+			DurationSeconds: aws.Int32(3600),
 		},
 		Version:    "2011-06-15",
 		Region:     *awsRegion,
@@ -126,10 +138,10 @@ TO use this mode, initialize any of the HSM backends.  The following uses KMS an
 	})
 
 	assumeRoleCredentials, err := hmaccred.NewAWSTinkCredentials(hmaccred.TINKProvider{
-		AssumeRoleInput: &stsschema.AssumeRoleInput{
+		AssumeRoleInput: &sts.AssumeRoleInput{
 			RoleArn:         aws.String(*roleARN),
 			RoleSessionName: aws.String(roleSessionName),
-			DurationSeconds: aws.Int64(3600),
+			DurationSeconds: aws.Int32(3600),
 		},
 		Version:    "2011-06-15",
 		Region:     *awsRegion,
@@ -138,22 +150,29 @@ TO use this mode, initialize any of the HSM backends.  The following uses KMS an
 
 // for sessiontokens:
 
-	sess, err := session.NewSession(&aws.Config{
-		Region:      aws.String(*awsRegion),
-		Credentials: sessionCredentials,
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(*awsRegion), config.WithCredentialsProvider(sessionCredentials))
+
+	stssvc := sts.NewFromConfig(cfg, func(o *sts.Options) {
+		o.Region = *awsRegion
 	})
 
-	stssvc := sts.New(sess, aws.NewConfig().WithRegion(*awsRegion))
-	stsresp, err := stssvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	log.Printf("STS Identity from API %s\n", *stsresp.UserId)
+	stsresp, err := stssvc.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+
+	fmt.Printf("STS Identity from API %s\n", *stsresp.UserId)
 
 // for assume role and s3
 
-	sess2, err := session.NewSession(&aws.Config{
-		Region:      aws.String(*awsRegion),
-		Credentials: assumeRoleCredentials,
+	fmt.Println("-------------------------------- Calling s3 list buckets using Tink Signer with AssumeRole")
+
+	s3cfg2, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(*awsRegion), config.WithCredentialsProvider(assumeRoleCredentials))
+
+	s3svc2 := s3.NewFromConfig(s3cfg2, func(o *s3.Options) {
+		o.Region = *awsRegion
 	})
-	svc2 := s3.New(sess2, aws.NewConfig().WithRegion(*awsRegion))
+
+	result2, err := s3svc2.ListBuckets(ctx, input)
+
+	log.Println(len(result2.Buckets))
 ```
 
 ---
@@ -193,11 +212,7 @@ Please note the default signer here **requires** a persistentHandle.  If you wou
 
 * [tpm_hmac file import](https://github.com/salrashid123/tpm2/tree/master/hmac_import)
 
-#### Vault Usage Overview
-
-For this, the AWS key is saved into HashiCorp Vaults [Transit Engine](https://www.vaultproject.io/api-docs/secret/transit).
-
-While Vault already has a [secrets engine for AWS](https://www.vaultproject.io/docs/secrets/aws) which returns temp AWS Access keys to you, this instead embeds an AWS Secret *INTO* vault and use Vault's own [transit hmac](https://www.vaultproject.io/api-docs/secret/transit#generate-hmac) to sign the AWS request.
+You can also pass through an authorized session incase you bound the key to a policy like `PCRPolicy` or `PasswordPolicy`
 
 
 #### TINK Usage Overview

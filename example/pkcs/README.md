@@ -42,75 +42,45 @@ At this point, we are ready to run the sample application which will
 
 note, after step2, the AWS secret is embedded inside the HSM and can only be used to make HMAC signatures.
 
+
+### Load key:
+
+for step1 and 2, load the key to the HSM first
+
 ```bash
 export AWS_ACCESS_KEY_ID=AKIAUH3H6EGKERNFQLHJ
 export AWS_SECRET_ACCESS_KEY=YRJ86SK5qTOZQzZTI1u-redacted
 ```
 
-The output of this will run `STS.GetCallerIdentity`
+```bash
+$ go run create/main.go   --hsmLibrary /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so \
+     -accessKeyID $AWS_ACCESS_KEY_ID   -secretAccessKey $AWS_SECRET_ACCESS_KEY
 
-```log
-$ $ go run main.go   --hsmLibrary /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so   \
-
-   --awsRegion=us-east-1 -accessKeyID $AWS_ACCESS_KEY_ID   -secretAccessKey $AWS_SECRET_ACCESS_KEY
-2023/09/06 20:18:16 Using Default AWS v4Signer and StaticCredentials to make REST GET call to GetCallerIdentity
-2023/09/06 20:18:16    Response using AWS STS NewStaticCredentials and Standard v4.Singer 
-<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
-  <GetCallerIdentityResult>
-    <Arn>arn:aws:iam::291738886548:user/svcacct1</Arn>
-    <UserId>AIDAUH3H6EGKDO36JYJH3</UserId>
-    <Account>291738886548</Account>
-  </GetCallerIdentityResult>
-  <ResponseMetadata>
-    <RequestId>971cfd48-c993-497e-a08e-3bbee95274c4</RequestId>
-  </ResponseMetadata>
-</GetCallerIdentityResponse>
-2023/09/06 20:18:16    Initializing PKCS Keyset embedding AWS Secret
-CryptokiVersion.Major 2
-2023/09/06 20:18:16 Created HMAC Key: 2
--------------------------------- Calling HTTP POST on  GetCallerIdentity using Tink Signer
-2023/09/06 20:18:16 GetCallerIdentityResponse UserID AIDAUH3H6EGKDO36JYJH3
--------------------------------- GetCallerIdentity with SessionToken SDK
-2023/09/06 20:18:17 STS Identity from API AIDAUH3H6EGKDO36JYJH3
--------------------------------- GetCallerIdentity with AssumeRole SDK
-2023/09/06 20:18:17 Assumed role ARN: arn:aws:sts::291738886548:assumed-role/gcpsts/mysession
+## optionally list the key
+$ pkcs11-tool --module /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  --list-objects --pin mynewpin
+Using slot 0 with a present token (0x6a6ef465)
+Secret Key Object; unknown key algorithm 43
+  label:      HMACKey
+  ID:         0100
+  Usage:      sign, verify
+  Access:     sensitive
 ```
 
-The specific part that initializes the signer and creds:
+
+### Use AWS SDK
+
+Now run 
 
 ```golang
-	pkcsSigner, err := hmacsigner.NewPKCSSigner(&hmacsigner.PKCSSignerConfig{
-		PKCSConfig: hmacsigner.PKCSConfig{
-			Library: "/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so",
-			Slot:    0,
-			Label:   "HMACKey",
-			PIN:     "mynewpin",
-			Id:      id,
-		},
-		AccessKeyID: *accessKeyID,
-	})
 
+go run load/main.go --keyid=0100 --hsmLibrary /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so  \
+     --accessKeyID=$AWS_ACCESS_KEY_ID --roleARN="arn:aws:iam::291738886548:role/gcpsts"
 
-	hmacSigner := hmacsignerv4.NewSigner()
+-------------------------------- Calling HTTP POST on  GetCallerIdentity using Tink Signer
+GetCallerIdentityResponse UserID AIDAUH3H6EGKDO36JYJH3
+-------------------------------- GetCallerIdentity with SessionToken SDK
+STS Identity from API AIDAUH3H6EGKDO36JYJH3
+-------------------------------- GetCallerIdentity with AssumeRole SDK
+Assumed role ARN: arn:aws:sts::291738886548:assumed-role/gcpsts/mysession
 
-	sessionCredentials, err := hmaccred.NewAWSPKCSCredentials(hmaccred.PKCSProvider{
-		GetSessionTokenInput: &stsschema.GetSessionTokenInput{
-			DurationSeconds: aws.Int64(3600),
-		},
-		Version:    "2011-06-15",
-		Region:     *awsRegion,
-		PKCSSigner: pkcsSigner,
-	})
-
-
-	assumeRoleCredentials, err := hmaccred.NewAWSPKCSCredentials(hmaccred.PKCSProvider{
-		AssumeRoleInput: &stsschema.AssumeRoleInput{
-			RoleArn:         aws.String(*roleARN),
-			RoleSessionName: aws.String(roleSessionName),
-			DurationSeconds: aws.Int64(3600),
-		},
-		Version:    "2011-06-15",
-		Region:     *awsRegion,
-		PKCSSigner: pkcsSigner,
-	})
 ```
