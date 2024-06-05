@@ -4,6 +4,7 @@
 package v4
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -37,21 +38,25 @@ func newDerivedKeyCache() derivedKeyCache {
 	}
 }
 
-func (s *derivedKeyCache) Get(credentials hmaccred.PKCSSigner, service, region string, signingTime SigningTime) []byte {
+func (s *derivedKeyCache) Get(credentials hmaccred.PKCSSigner, service, region string, signingTime SigningTime) ([]byte, error) {
 	key := lookupKey(service, region)
 	s.mutex.RLock()
 	if cred, ok := s.get(key, credentials, signingTime.Time); ok {
 		s.mutex.RUnlock()
-		return cred
+		return cred, nil
 	}
 	s.mutex.RUnlock()
 
 	s.mutex.Lock()
 	if cred, ok := s.get(key, credentials, signingTime.Time); ok {
 		s.mutex.Unlock()
-		return cred
+		return cred, nil
 	}
-	cred := deriveKey(credentials, service, region, signingTime)
+	cred, err := deriveKey(credentials, service, region, signingTime)
+	if err != nil {
+		s.mutex.Unlock()
+		return nil, err
+	}
 	entry := derivedKey{
 		AccessKey:  credentials.AccessKeyID,
 		Date:       signingTime.Time,
@@ -60,7 +65,7 @@ func (s *derivedKeyCache) Get(credentials hmaccred.PKCSSigner, service, region s
 	s.values[key] = entry
 	s.mutex.Unlock()
 
-	return cred
+	return cred, nil
 }
 
 func (s *derivedKeyCache) get(key string, credentials hmaccred.PKCSSigner, signingTime time.Time) ([]byte, bool) {
@@ -91,20 +96,20 @@ func NewSigningKeyDeriver() *SigningKeyDeriver {
 }
 
 // DeriveKey returns a derived signing key from the given credentials to be used with SigV4 signing.
-func (k *SigningKeyDeriver) DeriveKey(credential hmaccred.PKCSSigner, service, region string, signingTime SigningTime) []byte {
+func (k *SigningKeyDeriver) DeriveKey(credential hmaccred.PKCSSigner, service, region string, signingTime SigningTime) ([]byte, error) {
 	return k.cache.Get(credential, service, region, signingTime)
 }
 
-func deriveKey(cred hmaccred.PKCSSigner, service, region string, t SigningTime) []byte {
+func deriveKey(cred hmaccred.PKCSSigner, service, region string, t SigningTime) ([]byte, error) {
 	//hmacDate := HMACSHA256([]byte("AWS4"+secret), []byte(t.ShortTimeFormat()))
 
 	hmacDate, err := cred.MAC([]byte(t.ShortTimeFormat()))
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("Error getting MAC: %v\n", err)
 	}
 	hmacRegion := HMACSHA256(hmacDate, []byte(region))
 	hmacService := HMACSHA256(hmacRegion, []byte(service))
-	return HMACSHA256(hmacService, []byte("aws4_request"))
+	return HMACSHA256(hmacService, []byte("aws4_request")), nil
 }
 
 func isSameDay(x, y time.Time) bool {

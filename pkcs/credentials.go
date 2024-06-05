@@ -140,6 +140,7 @@ func (s *PKCSCredentialsProvider) Retrieve(ctx context.Context) (aws.Credentials
 			AccessKeyID:     stsOutput.AssumeRoleResult.Credentials.AccessKeyId,
 			SecretAccessKey: stsOutput.AssumeRoleResult.Credentials.SecretAccessKey,
 			SessionToken:    stsOutput.AssumeRoleResult.Credentials.SessionToken,
+			Expires:         stsOutput.AssumeRoleResult.Credentials.Expiration,
 		}
 
 		s.expiration = stsOutput.AssumeRoleResult.Credentials.Expiration
@@ -208,6 +209,7 @@ func (s *PKCSCredentialsProvider) Retrieve(ctx context.Context) (aws.Credentials
 			AccessKeyID:     stsOutput.SessionTokenResult.Credentials.AccessKeyId,
 			SecretAccessKey: stsOutput.SessionTokenResult.Credentials.SecretAccessKey,
 			SessionToken:    stsOutput.SessionTokenResult.Credentials.SessionToken,
+			Expires:         stsOutput.SessionTokenResult.Credentials.Expiration,
 		}
 
 		s.expiration = stsOutput.SessionTokenResult.Credentials.Expiration

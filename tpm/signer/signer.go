@@ -15,8 +15,10 @@ import (
 
 type TPMConfig struct {
 	TPMDevice        io.ReadWriteCloser
-	AuthHandle       tpm2.AuthHandle
-	Auth             tpm2.TPM2BAuth
+	ObjectHandle     tpm2.TPMHandle
+	ObjectName       tpm2.TPM2BName
+	ObjectAuth       tpm2.TPM2BAuth
+	Session          tpm2.Session
 	EncryptionHandle tpm2.TPMHandle   // (optional) handle to use for transit encryption
 	EncryptionPub    *tpm2.TPMTPublic // (optional) public key to use for transit encryption
 }
@@ -63,16 +65,10 @@ func (ts *TPMSigner) MAC(msg []byte) ([]byte, error) {
 	defer ts.refreshMutex.Unlock()
 
 	rwr := transport.FromReadWriter(ts.TPMConfig.TPMDevice)
-	return ts.hmac(rwr, msg, ts.TPMConfig.AuthHandle, ts.TPMConfig.Auth)
+	return ts.hmac(rwr, msg, ts.TPMConfig.ObjectHandle, ts.TPMConfig.ObjectName, ts.TPMConfig.ObjectAuth, ts.TPMConfig.Session)
 }
 
-func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objAuthHandle tpm2.AuthHandle, objAuth tpm2.TPM2BAuth) ([]byte, error) {
-
-	hmacStart := tpm2.HmacStart{
-		Handle:  objAuthHandle,
-		Auth:    objAuth,
-		HashAlg: tpm2.TPMAlgNull,
-	}
+func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objHandle tpm2.TPMHandle, objName tpm2.TPM2BName, objAuth tpm2.TPM2BAuth, sess tpm2.Session) ([]byte, error) {
 
 	var rsess tpm2.Session
 	if ts.encryptionHandle != 0 && ts.encryptionPub != nil {
@@ -80,14 +76,21 @@ func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objAuthHandle tpm2.Aut
 	} else {
 		rsess = tpm2.HMAC(tpm2.TPMAlgSHA256, 16, tpm2.AESEncryption(128, tpm2.EncryptIn))
 	}
-
-	rspHS, err := hmacStart.Execute(rwr, rsess)
+	rspHS, err := tpm2.HmacStart{
+		Handle: tpm2.AuthHandle{
+			Handle: objHandle,
+			Name:   objName,
+			Auth:   sess,
+		},
+		Auth:    objAuth,
+		HashAlg: tpm2.TPMAlgNull,
+	}.Execute(rwr, rsess)
 	if err != nil {
 		return nil, err
 	}
 
 	authHandle := tpm2.AuthHandle{
-		Name:   objAuthHandle.Name,
+		Name:   objName,
 		Handle: rspHS.SequenceHandle,
 		Auth:   tpm2.PasswordAuth(objAuth.Buffer),
 	}

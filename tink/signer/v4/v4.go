@@ -33,7 +33,7 @@ type HTTPSigner interface {
 }
 
 type keyDerivator interface {
-	DeriveKey(credential hmaccred.TinkSigner, service, region string, signingTime SigningTime) []byte
+	DeriveKey(credential hmaccred.TinkSigner, service, region string, signingTime SigningTime) ([]byte, error)
 }
 
 // SignerOptions is the SigV4 Signer options.
@@ -444,7 +444,10 @@ func makeHash(hash hash.Hash, b []byte) []byte {
 }
 
 func (s *httpSigner) buildSignature(strToSign string) (string, error) {
-	key := s.KeyDerivator.DeriveKey(s.Credentials, s.ServiceName, s.Region, s.Time)
+	key, err := s.KeyDerivator.DeriveKey(s.Credentials, s.ServiceName, s.Region, s.Time)
+	if err != nil {
+		return "", err
+	}
 	return hex.EncodeToString(HMACSHA256(key, []byte(strToSign))), nil
 }
 
