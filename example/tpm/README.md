@@ -22,16 +22,13 @@ If you installed `tpm2_tools`, then you can either directly import a key or do a
 The following does a direct import
 
 ```bash
-export AWS_SECRET_ACCESS_KEY="change this password to a secret"
-export plain="foo"
+export AWS_ACCESS_KEY_ID=AKIAUH3H6EGK-redacted
 
-echo -n $AWS_SECRET_ACCESS_KEY > hmac.key
+export secret="AWS4$AWS_SECRET_ACCESS_KEY"
+echo -n $secret > hmac.key
 hexkey=$(xxd -p -c 256 < hmac.key)
 echo $hexkey
-echo -n $plain > data.in
 
-openssl dgst -sha256 -mac hmac -macopt hexkey:$hexkey data.in
- 
 ### create primary object on owner hierarchy
 ### this primary is the "H2" credential profile
 ### pg 43 [TCG EK Credential Profile](https://trustedcomputinggroup.org/wp-content/uploads/TCG_IWG_EKCredentialProfile_v2p4_r2_10feb2021.pdf)
@@ -40,6 +37,7 @@ printf '\x00\x00' > unique.dat
 tpm2_createprimary -C o -G ecc  -g sha256  -c primary.ctx -a "fixedtpm|fixedparent|sensitivedataorigin|userwithauth|noda|restricted|decrypt" -u unique.dat
 
 tpm2 import -C primary.ctx -G hmac -i hmac.key -u hmac.pub -r hmac.priv
+tpm2_flushcontext -t
 tpm2 load -C primary.ctx -u hmac.pub -r hmac.priv -c hmac.ctx
 
 ### optionally export the key to PEM
@@ -47,8 +45,7 @@ tpm2 load -C primary.ctx -u hmac.pub -r hmac.priv -c hmac.ctx
 
 # evict it to handle 0x81008001
 tpm2_evictcontrol -C o -c hmac.ctx 0x81008001 
-
-echo -n $plain | tpm2_hmac -g sha256 -c 0x81008001 | xxd -p -c 256
+tpm2_flushcontext -t
 ```
 
 Also see [Importing External HMAC and performing HMAC Signature](https://github.com/salrashid123/tpm2/tree/master/hmac_import))
@@ -150,7 +147,177 @@ xr9pHcM=
 
 You can supply a fulfilled session policy into this library (eg a PCR policy).
 
-For a generic example of that, see [seal an external hmac key to a tpm with a PCR policy](https://gist.github.com/salrashid123/9ee5e02d5991c8d53717bd9a179a65b0)
+For example, the following uses a software TPM:
+
+```bash
+$ rm -rf /tmp/myvtpm && mkdir /tmp/myvtpm
+$ sudo swtpm socket --tpmstate dir=/tmp/myvtpm --tpm2 --server type=tcp,port=2321 --ctrl type=tcp,port=2322 --flags not-need-init,startup-clear
+```
+
+#### Password Policy
+
+To use this mode, first setup a key with a Password policy (password is `testpwd`)
+
+```bash
+export AWS_ACCESS_KEY_ID=AKIAUH3H6EGK-redacted
+
+export secret="AWS4$AWS_SECRET_ACCESS_KEY"
+echo -n $secret > hmac.key
+hexkey=$(xxd -p -c 256 < hmac.key)
+echo $hexkey
+
+printf '\x00\x00' > unique.dat
+tpm2_createprimary -C o -G ecc  -g sha256  -c primary.ctx -a "fixedtpm|fixedparent|sensitivedataorigin|userwithauth|noda|restricted|decrypt" -u unique.dat
+
+tpm2_import -C primary.ctx -G hmac -i hmac.key -u hmac.pub -r hmac.priv -p testpwd
+tpm2_flushcontext -t
+tpm2_load -C primary.ctx -u hmac.pub -r hmac.priv -c hmac.ctx 
+tpm2_flushcontext -t
+tpm2_evictcontrol -C o -c hmac.ctx 0x81008001
+```
+
+```golang
+	hmacKey := tpm2.TPMHandle(*persistentHandle)
+	pub, err := tpm2.ReadPublic{
+		ObjectHandle: hmacKey,
+	}.Execute(rwr)
+
+	p, err := hmacsigner.NewPasswordSession(rwr, []byte("testpwd"))
+
+	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
+		TPMConfig: hmacsigner.TPMConfig{
+			TPMDevice: rwc,
+			NamedHandle: tpm2.NamedHandle{
+				Handle: hmacKey,
+				Name:   pub.Name,
+			},
+			AuthSession:      p,
+			EncryptionHandle: createEKRsp.ObjectHandle,
+			EncryptionPub:    encryptionPub,
+		},
+		AccessKeyID: *accessKeyID,
+	})
+```
+
+Then,
+
+```bash
+$ go run policy_password/main.go --tpm-path="127.0.0.1:2321" \
+   --accessKeyID=$AWS_ACCESS_KEY_ID --persistentHandle 0x81008001 --roleARN="arn:aws:iam::291738886548:role/gcpsts"
+```
+
+#### PCR Policy
+
+For PCR policy, you do the same except set:
+
+```bash
+export AWS_ACCESS_KEY_ID=AKIAUH3H6EGK-redacted
+
+export secret="AWS4$AWS_SECRET_ACCESS_KEY"
+echo -n $secret > hmac.key
+hexkey=$(xxd -p -c 256 < hmac.key)
+echo $hexkey
+
+printf '\x00\x00' > unique.dat
+tpm2_createprimary -C o -G ecc  -g sha256  -c primary.ctx -a "fixedtpm|fixedparent|sensitivedataorigin|userwithauth|noda|restricted|decrypt" -u unique.dat
+
+tpm2_startauthsession -S session.dat
+tpm2_pcrread sha256:23 -o pcr23_val.bin
+tpm2_policypcr -S session.dat -l sha256:23 -f pcr23_val.bin -L policy.dat
+tpm2_flushcontext session.dat
+tpm2_flushcontext -t
+tpm2_import -C primary.ctx -G hmac -i hmac.key -u hmac.pub -r hmac.priv -L policy.dat
+tpm2_flushcontext -t
+tpm2_load -C primary.ctx -u hmac.pub -r hmac.priv -c hmac.ctx 
+tpm2_flushcontext -t
+tpm2_evictcontrol -C o -c hmac.ctx 0x81008002
+tpm2_flushcontext -t
+```
+
+then in code 
+
+
+```golang
+	hmacKey := tpm2.TPMHandle(*persistentHandle)
+	pub, err := tpm2.ReadPublic{
+		ObjectHandle: hmacKey,
+	}.Execute(rwr)
+
+	p, err := hmacsigner.NewPCRSession(rwr, []tpm2.TPMSPCRSelection{
+		{
+			Hash:      tpm2.TPMAlgSHA256,
+			PCRSelect: tpm2.PCClientCompatible.PCRs(23),
+		},
+	})
+
+
+	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
+		TPMConfig: hmacsigner.TPMConfig{
+			TPMDevice: rwc,
+			NamedHandle: tpm2.NamedHandle{
+				Handle: hmacKey,
+				Name:   pub.Name,
+			},
+			AuthSession:      p,
+			EncryptionHandle: createEKRsp.ObjectHandle,
+			EncryptionPub:    encryptionPub,
+		},
+		AccessKeyID: *accessKeyID,
+	})
+```
+
+Run
+
+```bash
+$ go run policy_pcr/main.go --tpm-path="127.0.0.1:2321" \
+   --accessKeyID=$AWS_ACCESS_KEY_ID --persistentHandle 0x81008002 --roleARN="arn:aws:iam::291738886548:role/gcpsts"
+```
+
+Note, you can define your own policy for import too...just implement the "session" interface from the signer:
+
+```golang
+type Session interface {
+	io.Closer                                   // read closer to the TPM
+	GetSession() (auth tpm2.Session, err error) // this supplies the session handle to the library
+}
+```
+
+eg:
+
+```golang
+// for pcr sessions
+type MySession struct {
+	rwr transport.TPM
+	sel []tpm2.TPMSPCRSelection
+}
+
+func NewMySession(rwr transport.TPM, sel []tpm2.TPMSPCRSelection) (MySession, error) {
+	return MySession{rwr, sel}, nil
+}
+
+func (p MySession) GetSession() (auth tpm2.Session, err error) {
+	sess, _, err := tpm2.PolicySession(p.rwr, tpm2.TPMAlgSHA256, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	// define your policy here
+	_, err = tpm2.PolicyPCR{
+		PolicySession: sess.Handle(),
+		Pcrs: tpm2.TPMLPCRSelection{
+			PCRSelections: p.sel,
+		},
+	}.Execute(p.rwr)
+	if err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+func (p MySession) Close() error {
+	return nil
+}
+```
 
 ### Session Encryption
 

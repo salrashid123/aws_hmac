@@ -1,6 +1,6 @@
 ## AWS Credentials for Hardware Security Modules and TPM based AWS_SECRET_ACCESS_KEY
 
-Sample procedure to **embed** AWS [Secret Access Keys](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) _inside_ an HSM device through [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11), [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module) and [Hashicorp Vault](https://www.vaultproject.io/).
+Library to to **embed** AWS [Secret Access Keys](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) _inside_ an HSM device through [PKCS #11](https://en.wikipedia.org/wiki/PKCS_11), [Trusted Platform Module](https://en.wikipedia.org/wiki/Trusted_Platform_Module) and [Hashicorp Vault](https://www.vaultproject.io/).
 
 The critical feature is, once the `AWS_SECRET_ACCESS_KEY` checks in, it never checks out, like a roach motel.  You ask the HSM and TPM to issue HMAC signature you can ultimately use for AWS Signatures v4 or more commonly, to access AWS resources.
 

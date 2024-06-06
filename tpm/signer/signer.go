@@ -7,6 +7,7 @@ package signer
 import (
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/google/go-tpm/tpm2"
@@ -15,10 +16,8 @@ import (
 
 type TPMConfig struct {
 	TPMDevice        io.ReadWriteCloser
-	ObjectHandle     tpm2.TPMHandle
-	ObjectName       tpm2.TPM2BName
-	ObjectAuth       tpm2.TPM2BAuth
-	Session          tpm2.Session
+	NamedHandle      tpm2.NamedHandle
+	AuthSession      Session          // If the key needs a session, supply one as the `tpmjwt.Session`
 	EncryptionHandle tpm2.TPMHandle   // (optional) handle to use for transit encryption
 	EncryptionPub    *tpm2.TPMTPublic // (optional) public key to use for transit encryption
 }
@@ -65,10 +64,27 @@ func (ts *TPMSigner) MAC(msg []byte) ([]byte, error) {
 	defer ts.refreshMutex.Unlock()
 
 	rwr := transport.FromReadWriter(ts.TPMConfig.TPMDevice)
-	return ts.hmac(rwr, msg, ts.TPMConfig.ObjectHandle, ts.TPMConfig.ObjectName, ts.TPMConfig.ObjectAuth, ts.TPMConfig.Session)
+
+	var se tpm2.Session
+	if ts.TPMConfig.AuthSession != nil {
+		var err error
+		se, err = ts.TPMConfig.AuthSession.GetSession()
+		if err != nil {
+			return nil, fmt.Errorf("aws_hmac: error getting session %v", err)
+		}
+		defer func() {
+			_, err = (&tpm2.FlushContext{FlushHandle: se.Handle()}).Execute(rwr)
+		}()
+	} else {
+		se = tpm2.PasswordAuth(nil)
+	}
+
+	objAuth := &tpm2.TPM2BAuth{}
+
+	return ts.hmac(rwr, msg, ts.TPMConfig.NamedHandle, *objAuth, se)
 }
 
-func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objHandle tpm2.TPMHandle, objName tpm2.TPM2BName, objAuth tpm2.TPM2BAuth, sess tpm2.Session) ([]byte, error) {
+func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objNamedHandle tpm2.NamedHandle, objAuth tpm2.TPM2BAuth, sess tpm2.Session) ([]byte, error) {
 
 	var rsess tpm2.Session
 	if ts.encryptionHandle != 0 && ts.encryptionPub != nil {
@@ -78,19 +94,20 @@ func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objHandle tpm2.TPMHand
 	}
 	rspHS, err := tpm2.HmacStart{
 		Handle: tpm2.AuthHandle{
-			Handle: objHandle,
-			Name:   objName,
+			Handle: objNamedHandle.Handle,
+			Name:   objNamedHandle.Name,
 			Auth:   sess,
 		},
 		Auth:    objAuth,
 		HashAlg: tpm2.TPMAlgNull,
 	}.Execute(rwr, rsess)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error executing HMAC sequenceStart  %v\n", err)
 		return nil, err
 	}
 
 	authHandle := tpm2.AuthHandle{
-		Name:   objName,
+		Name:   objNamedHandle.Name,
 		Handle: rspHS.SequenceHandle,
 		Auth:   tpm2.PasswordAuth(objAuth.Buffer),
 	}
@@ -103,6 +120,7 @@ func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objHandle tpm2.TPMHand
 		}
 		_, err = sequenceUpdate.Execute(rwr)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error executing HMAC sequenceUpdate  %v\n", err)
 			return nil, err
 		}
 		data = data[maxInputBuffer:]
@@ -118,9 +136,62 @@ func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objHandle tpm2.TPMHand
 
 	rspSC, err := sequenceComplete.Execute(rwr)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error executing HMAC sequenceComplete  %v\n", err)
 		return nil, err
 	}
-
 	return rspSC.Result.Buffer, nil
+}
 
+type Session interface {
+	io.Closer                                   // read closer to the TPM
+	GetSession() (auth tpm2.Session, err error) // this supplies the session handle to the library
+}
+
+// for pcr sessions
+type PCRSession struct {
+	rwr transport.TPM
+	sel []tpm2.TPMSPCRSelection
+}
+
+func NewPCRSession(rwr transport.TPM, sel []tpm2.TPMSPCRSelection) (PCRSession, error) {
+	return PCRSession{rwr, sel}, nil
+}
+
+func (p PCRSession) GetSession() (auth tpm2.Session, err error) {
+	sess, _, err := tpm2.PolicySession(p.rwr, tpm2.TPMAlgSHA256, 16)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tpm2.PolicyPCR{
+		PolicySession: sess.Handle(),
+		Pcrs: tpm2.TPMLPCRSelection{
+			PCRSelections: p.sel,
+		},
+	}.Execute(p.rwr)
+	if err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+func (p PCRSession) Close() error {
+	return nil
+}
+
+// for password sessions
+type PasswordSession struct {
+	rwr      transport.TPM
+	password []byte
+}
+
+func NewPasswordSession(rwr transport.TPM, password []byte) (PasswordSession, error) {
+	return PasswordSession{rwr, password}, nil
+}
+
+func (p PasswordSession) GetSession() (auth tpm2.Session, err error) {
+	return tpm2.PasswordAuth(p.password), nil
+}
+
+func (p PasswordSession) Close() error {
+	return nil
 }

@@ -12,6 +12,10 @@ require (
 	github.com/google/go-tpm v0.9.1-0.20240514145214-58e3e47cd434
 	github.com/google/go-tpm-tools v0.4.0
 	github.com/gorilla/schema v1.3.0
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3
+	github.com/salrashid123/aws_hmac/tpm v0.0.0-00010101000000-000000000000
+	github.com/salrashid123/aws_hmac/tpm/signer v0.0.0-20240603115806-b0a186b8b4b4
+	github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3
 )
 
 require golang.org/x/sys v0.20.0 // indirect
@@ -27,16 +31,16 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.20.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.3 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3 // indirect
-	github.com/salrashid123/aws_hmac/tpm v0.0.0-20240603121259-f254d7e77c0c // indirect
-	github.com/salrashid123/aws_hmac/tpm/signer v0.0.0-20240603115806-b0a186b8b4b4 // indirect
-	github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3 // indirect
+	// github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3 // indirect
+	// github.com/salrashid123/aws_hmac/tpm v0.0.0-20240603121259-f254d7e77c0c // indirect
+	// github.com/salrashid123/aws_hmac/tpm/signer v0.0.0-20240603115806-b0a186b8b4b4 // indirect
+	// github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3 // indirect
 	golang.org/x/crypto v0.19.0 // indirect
 )
 
-// replace (
-// 	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
-// 	github.com/salrashid123/aws_hmac/tpm => ../../tpm
-// 	github.com/salrashid123/aws_hmac/tpm/signer => ../../tpm/signer
-// 	github.com/salrashid123/aws_hmac/tpm/signer/v4 => ../../tpm/signer/v4
-// )
+replace (
+	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
+	github.com/salrashid123/aws_hmac/tpm => ../../tpm
+	github.com/salrashid123/aws_hmac/tpm/signer => ../../tpm/signer
+	github.com/salrashid123/aws_hmac/tpm/signer/v4 => ../../tpm/signer/v4
+)
