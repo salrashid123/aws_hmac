@@ -192,11 +192,6 @@ func main() {
 		}
 	}()
 
-	hmackeyPassword := []byte("")
-	objAuth := &tpm2.TPM2BAuth{
-		Buffer: hmackeyPassword,
-	}
-
 	// acquire a well-known key you know to be on the system
 	// and use this for session encryption (eg, encrypting traffic on the hardware cpu<->tpm bus)
 	//  this step is optional but recommended, In the following example, i'm using the EK
@@ -233,12 +228,10 @@ func main() {
 	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
 		TPMConfig: hmacsigner.TPMConfig{
 			TPMDevice: rwc,
-			AuthHandle: tpm2.AuthHandle{
+			NamedHandle: tpm2.NamedHandle{
 				Handle: hmacKey.ObjectHandle,
 				Name:   pub.Name,
-				Auth:   tpm2.PasswordAuth(nil),
 			},
-			Auth:             *objAuth,
 			EncryptionHandle: createEKRsp.ObjectHandle,
 			EncryptionPub:    encryptionPub,
 		},
