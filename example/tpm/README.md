@@ -266,6 +266,31 @@ then in code
 	})
 ```
 
+which you can call as:
+
+```golang
+	p, err := NewPCRAndPolicyAuthValueSession(rwr, []tpm2.TPMSPCRSelection{
+		{
+			Hash:      tpm2.TPMAlgSHA256,
+			PCRSelect: tpm2.PCClientCompatible.PCRs(uint(*pcr)),
+		},
+	}, []byte("testpswd"))
+
+	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
+		TPMConfig: hmacsigner.TPMConfig{
+			TPMDevice: rwc,
+			NamedHandle: tpm2.NamedHandle{
+				Handle: hmacKey,
+				Name:   pub.Name,
+			},
+			AuthSession:      p,
+			EncryptionHandle: createEKRsp.ObjectHandle,
+			EncryptionPub:    encryptionPub,
+		},
+		AccessKeyID: *accessKeyID,
+	})
+```
+
 Run
 
 if using a software tpm to test:
