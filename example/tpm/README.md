@@ -268,6 +268,8 @@ then in code
 
 Run
 
+if using a software tpm to test:
+
 ```bash
 $ go run policy_pcr/main.go --tpm-path="127.0.0.1:2321" \
    --accessKeyID=$AWS_ACCESS_KEY_ID --persistentHandle 0x81008002 --roleARN="arn:aws:iam::291738886548:role/gcpsts"
@@ -281,27 +283,28 @@ type Session interface {
 }
 ```
 
-eg: 
+for example, for a PCR and [AuthPolicy](https://github.com/google/go-tpm/pull/359) enforcement (eg, a PCR and password), you can define a custom session callback
 
 ```golang
-// for pcr sessions
-type MyCustomSession struct {
-	rwr transport.TPM
-	sel []tpm2.TPMSPCRSelection
+type MyPCRAndPolicyAuthValueSession struct {
+	rwr      transport.TPM
+	sel      []tpm2.TPMSPCRSelection
+	password []byte
 }
 
-func NewMyCustomSession(rwr transport.TPM, sel []tpm2.TPMSPCRSelection) (MyCustomSession, error) {
-	return MyCustomSession{rwr, sel}, nil
+func NewPCRAndPolicyAuthValueSession(rwr transport.TPM, sel []tpm2.TPMSPCRSelection, password []byte) (MyPCRAndPolicyAuthValueSession, error) {
+	return MyPCRAndPolicyAuthValueSession{rwr, sel, password}, nil
 }
 
-func (p MyCustomSession) GetSession() (auth tpm2.Session, closer func() error, err error) {
+func (p MyPCRAndPolicyAuthValueSession) GetSession() (auth tpm2.Session, closer func() error, err error) {
 
-	sess, closer, err := tpm2.PolicySession(p.rwr, tpm2.TPMAlgSHA256, 16)
+	var options []tpm2.AuthOption
+	options = append(options, tpm2.Auth(p.password))
+
+	sess, closer, err := tpm2.PolicySession(p.rwr, tpm2.TPMAlgSHA256, 16, options...)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// implement whatever you want here, i'm just using policypcr
 
 	_, err = tpm2.PolicyPCR{
 		PolicySession: sess.Handle(),
@@ -312,6 +315,14 @@ func (p MyCustomSession) GetSession() (auth tpm2.Session, closer func() error, e
 	if err != nil {
 		return nil, nil, err
 	}
+
+	_, err = tpm2.PolicyAuthValue{
+		PolicySession: sess.Handle(),
+	}.Execute(p.rwr)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return sess, closer, nil
 }
 ```
