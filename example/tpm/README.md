@@ -266,41 +266,9 @@ then in code
 	})
 ```
 
-which you can call as:
+### Custom Policy
 
-```golang
-	p, err := NewPCRAndPolicyAuthValueSession(rwr, []tpm2.TPMSPCRSelection{
-		{
-			Hash:      tpm2.TPMAlgSHA256,
-			PCRSelect: tpm2.PCClientCompatible.PCRs(uint(*pcr)),
-		},
-	}, []byte("testpswd"))
-
-	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
-		TPMConfig: hmacsigner.TPMConfig{
-			TPMDevice: rwc,
-			NamedHandle: tpm2.NamedHandle{
-				Handle: hmacKey,
-				Name:   pub.Name,
-			},
-			AuthSession:      p,
-			EncryptionHandle: createEKRsp.ObjectHandle,
-			EncryptionPub:    encryptionPub,
-		},
-		AccessKeyID: *accessKeyID,
-	})
-```
-
-Run
-
-if using a software tpm to test:
-
-```bash
-$ go run policy_pcr/main.go --tpm-path="127.0.0.1:2321" \
-   --accessKeyID=$AWS_ACCESS_KEY_ID --persistentHandle 0x81008002 --roleARN="arn:aws:iam::291738886548:role/gcpsts"
-```
-
-Note, you can define your own policy for import too...just implement the "session" interface from the signer:
+You can define your own policy for import too...just implement the "session" interface from the signer:
 
 ```golang
 type Session interface {
@@ -350,6 +318,31 @@ func (p MyPCRAndPolicyAuthValueSession) GetSession() (auth tpm2.Session, closer 
 
 	return sess, closer, nil
 }
+```
+
+which you can call as:
+
+```golang
+	p, err := NewPCRAndPolicyAuthValueSession(rwr, []tpm2.TPMSPCRSelection{
+		{
+			Hash:      tpm2.TPMAlgSHA256,
+			PCRSelect: tpm2.PCClientCompatible.PCRs(uint(*pcr)),
+		},
+	}, []byte("testpswd"))
+
+	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
+		TPMConfig: hmacsigner.TPMConfig{
+			TPMDevice: rwc,
+			NamedHandle: tpm2.NamedHandle{
+				Handle: hmacKey,
+				Name:   pub.Name,
+			},
+			AuthSession:      p,
+			EncryptionHandle: createEKRsp.ObjectHandle,
+			EncryptionPub:    encryptionPub,
+		},
+		AccessKeyID: *accessKeyID,
+	})
 ```
 
 ### Session Encryption
