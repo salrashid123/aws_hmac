@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -125,12 +127,18 @@ func main() {
 
 	hmacSensitive := []byte("AWS4" + *secretAccessKey)
 
+	sv := make([]byte, 32)
+	io.ReadFull(rand.Reader, sv)
+	privHash := crypto.SHA256.New()
+	privHash.Write(sv)
+	privHash.Write(hmacSensitive)
+
 	hmacTemplate := tpm2.TPMTPublic{
 		Type:    tpm2.TPMAlgKeyedHash,
 		NameAlg: tpm2.TPMAlgSHA256,
 		ObjectAttributes: tpm2.TPMAObject{
-			FixedTPM:            true,
-			FixedParent:         true,
+			FixedTPM:            false,
+			FixedParent:         false,
 			SensitiveDataOrigin: false,
 			UserWithAuth:        true,
 			SignEncrypt:         true,
@@ -146,28 +154,60 @@ func main() {
 						}),
 				},
 			}),
+		Unique: tpm2.NewTPMUPublicID(
+			tpm2.TPMAlgKeyedHash,
+			&tpm2.TPM2BDigest{
+				Buffer: privHash.Sum(nil),
+			},
+		),
 	}
 
-	hmacKeyRequest := tpm2.CreateLoaded{
+	sens2B := tpm2.Marshal(tpm2.TPMTSensitive{
+		SensitiveType: tpm2.TPMAlgKeyedHash,
+		SeedValue: tpm2.TPM2BDigest{
+			Buffer: sv,
+		},
+		Sensitive: tpm2.NewTPMUSensitiveComposite(
+			tpm2.TPMAlgKeyedHash,
+			&tpm2.TPM2BSensitiveData{Buffer: hmacSensitive},
+		),
+	})
+
+	l := tpm2.Marshal(tpm2.TPM2BPrivate{Buffer: sens2B})
+
+	importResponse, err := tpm2.Import{
 		ParentHandle: tpm2.AuthHandle{
 			Handle: primaryKey.ObjectHandle,
 			Name:   primaryKey.Name,
 			Auth:   tpm2.PasswordAuth(nil),
 		},
-		InSensitive: tpm2.TPM2BSensitiveCreate{
-			Sensitive: &tpm2.TPMSSensitiveCreate{
-				Data: tpm2.NewTPMUSensitiveCreate(&tpm2.TPM2BSensitiveData{
-					Buffer: hmacSensitive,
-				}),
-			},
-		},
-		InPublic: tpm2.New2BTemplate(&hmacTemplate),
-	}
-	hmacKey, err := hmacKeyRequest.Execute(rwr)
+		ObjectPublic: tpm2.New2B(hmacTemplate),
+		Duplicate:    tpm2.TPM2BPrivate{Buffer: l},
+	}.Execute(rwr)
 	if err != nil {
-		fmt.Printf("error: can't create hmac key %q: %v\n", *tpmPath, err)
+		fmt.Printf("can't import hmac %v", err)
+	}
+
+	hmacKey, err := tpm2.Load{
+		ParentHandle: tpm2.AuthHandle{
+			Handle: primaryKey.ObjectHandle,
+			Name:   primaryKey.Name,
+			Auth:   tpm2.PasswordAuth(nil),
+		},
+		InPublic:  tpm2.New2B(hmacTemplate),
+		InPrivate: importResponse.OutPrivate,
+	}.Execute(rwr)
+	if err != nil {
+		fmt.Printf("can't load hmac %v", err)
 		return
 	}
+
+	defer func() {
+		flushContextCmd := tpm2.FlushContext{
+			FlushHandle: hmacKey.ObjectHandle,
+		}
+		_, _ = flushContextCmd.Execute(rwr)
+	}()
 
 	defer func() {
 		flushContextCmd := tpm2.FlushContext{
@@ -191,7 +231,7 @@ func main() {
 	}
 
 	// write to PEM file
-	tkf, err := keyfile.NewLoadableKey(hmacKey.OutPublic, hmacKey.OutPrivate, primaryKey.ObjectHandle, false)
+	tkf, err := keyfile.NewLoadableKey(tpm2.New2B(hmacTemplate), importResponse.OutPrivate, primaryKey.ObjectHandle, false)
 	if err != nil {
 		fmt.Printf("failed to load hmacKey: %v\n", err)
 		return
