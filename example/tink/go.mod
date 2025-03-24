@@ -7,8 +7,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.16
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.10
 	github.com/gorilla/schema v1.2.0
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
-	github.com/salrashid123/aws_hmac/tink v0.0.0
+	// github.com/salrashid123/aws_hmac/stsschema v0.0.0
+	// github.com/salrashid123/aws_hmac/tink v0.0.0
 	github.com/tink-crypto/tink-go-gcpkms/v2 v2.1.0
 	github.com/tink-crypto/tink-go/v2 v2.1.0
 	google.golang.org/protobuf v1.33.0
@@ -33,6 +33,8 @@ require (
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.1 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20250324113806-6d5ca0008d64 // indirect
+	github.com/salrashid123/aws_hmac/tink v0.0.0-20250324113806-6d5ca0008d64 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
@@ -45,7 +47,7 @@ require (
 	google.golang.org/grpc v1.58.3 // indirect
 )
 
-replace (
-	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
-	github.com/salrashid123/aws_hmac/tink => ../../tink
-)
+// replace (
+// 	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
+// 	github.com/salrashid123/aws_hmac/tink => ../../tink
+// )

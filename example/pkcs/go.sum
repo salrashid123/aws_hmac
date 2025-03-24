@@ -28,3 +28,7 @@ github.com/gorilla/schema v1.2.0 h1:YufUaxZYCKGFuAq3c96BOhjgd5nmXiOY9NGzF247Tsc=
 github.com/gorilla/schema v1.2.0/go.mod h1:kgLaKoK1FELgZqMAVxx/5cbj0kT+57qxUrAlIO2eleU=
 github.com/miekg/pkcs11 v1.1.1 h1:Ugu9pdy6vAYku5DEpVWVFPYnzV+bxB+iRdbuFSu7TvU=
 github.com/miekg/pkcs11 v1.1.1/go.mod h1:XsNlhZGX73bx86s2hdc/FuaLm2CPZJemRLMA+WTFxgs=
+github.com/salrashid123/aws_hmac/pkcs v0.0.0-20250324113806-6d5ca0008d64 h1:xKnhC+uwNt4CUXqa1A7HDJ06fQpfHe/fGSHdQLE4N40=
+github.com/salrashid123/aws_hmac/pkcs v0.0.0-20250324113806-6d5ca0008d64/go.mod h1:Rq5171rzLoJ9jgDUoRlYTpHNTHBD4c63TkO7Zwr7pyQ=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20250324113806-6d5ca0008d64 h1:aqLTPScZH9IVLtHqrxujW/LVxQ3MfMiIm+P0RuWXQv4=
+github.com/salrashid123/aws_hmac/stsschema v0.0.0-20250324113806-6d5ca0008d64/go.mod h1:/JTINTWSeIL/gvkmlGh7O5+knoymbf0cSat/QDaTOC0=

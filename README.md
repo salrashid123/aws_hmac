@@ -81,6 +81,11 @@ You can use a signer to make an authenticate API calls directly.
 TO use this mode, initialize any of the HSM backends.  The following uses KMS and Tink to sign a REST API for `GetCallerIdentity` endpoint
 
 ```golang
+// import latest by first importing the schema
+// go get github.com/salrashid123/aws_hmac/stsschema@latest
+// go get github.com/salrashid123/aws_hmac/tink@latest
+
+
 import (
 	"github.com/salrashid123/aws_hmac/stsschema"
 	gcpkms "github.com/tink-crypto/tink-go-gcpkms/v2/integration/gcpkms"

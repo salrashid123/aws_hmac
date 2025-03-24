@@ -13,14 +13,13 @@ require (
 	github.com/google/go-tpm v0.9.1-0.20240514145214-58e3e47cd434
 	github.com/google/go-tpm-tools v0.4.4
 	github.com/gorilla/schema v1.3.0
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0
-	github.com/salrashid123/aws_hmac/tpm v0.0.0
-// github.com/salrashid123/aws_hmac/tpm/signer v0.0.0
-// github.com/salrashid123/aws_hmac/tpm/signer/v4 v4.0.0
+
 )
 
 require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20250324113806-6d5ca0008d64 // indirect
+	github.com/salrashid123/aws_hmac/tpm v0.0.0-20250324113806-6d5ca0008d64 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 )
 
@@ -42,9 +41,7 @@ require (
 	golang.org/x/crypto v0.19.0 // indirect
 )
 
-replace (
-	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
-	github.com/salrashid123/aws_hmac/tpm => ../../tpm
-// github.com/salrashid123/aws_hmac/tpm/signer => ../../tpm/signer
-// github.com/salrashid123/aws_hmac/tpm/signer/v4 => ../../tpm/signer/v4
-)
+// replace (
+// 	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
+// 	github.com/salrashid123/aws_hmac/tpm => ../../tpm
+// )
