@@ -12,7 +12,7 @@ This repo provides four ways to protect the aws secret:
 
 3. Wrap the secret using `KMS` and access it via `TINK`. `"github.com/salrashid123/aws_hmac/tink"`
 
->> NOTE: This code is NOT Supported by Google; its just a POC. caveat emptor
+>> NOTE: This code is NOT Supported by Google
 
 ---
 
@@ -81,6 +81,14 @@ You can use a signer to make an authenticate API calls directly.
 TO use this mode, initialize any of the HSM backends.  The following uses KMS and Tink to sign a REST API for `GetCallerIdentity` endpoint
 
 ```golang
+import (
+	"github.com/salrashid123/aws_hmac/stsschema"
+	gcpkms "github.com/tink-crypto/tink-go-gcpkms/v2/integration/gcpkms"
+	hmaccred "github.com/salrashid123/aws_hmac/tink"
+	hmacsigner "github.com/salrashid123/aws_hmac/tink/signer"
+	hmacsignerv4 "github.com/salrashid123/aws_hmac/tink/signer/v4"
+)
+
 	tinkSigner, err := hmacsigner.NewTinkSigner(&hmacsigner.TinkSignerConfig{
 		TinkConfig: hmacsigner.TinkConfig{
 			KmsBackend: backend,

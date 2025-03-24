@@ -30,48 +30,6 @@ var (
 	persistentHandle = flag.Uint("persistentHandle", 0x81008001, "Handle value")
 
 	out = flag.String("out", "private.pem", "privateKey File")
-
-	ECCSRKHTemplate = tpm2.TPMTPublic{
-		Type:    tpm2.TPMAlgECC,
-		NameAlg: tpm2.TPMAlgSHA256,
-		ObjectAttributes: tpm2.TPMAObject{
-			FixedTPM:            true,
-			FixedParent:         true,
-			SensitiveDataOrigin: true,
-			UserWithAuth:        true,
-			NoDA:                true,
-			Restricted:          true,
-			Decrypt:             true,
-		},
-		Parameters: tpm2.NewTPMUPublicParms(
-			tpm2.TPMAlgECC,
-			&tpm2.TPMSECCParms{
-				Symmetric: tpm2.TPMTSymDefObject{
-					Algorithm: tpm2.TPMAlgAES,
-					KeyBits: tpm2.NewTPMUSymKeyBits(
-						tpm2.TPMAlgAES,
-						tpm2.TPMKeyBits(128),
-					),
-					Mode: tpm2.NewTPMUSymMode(
-						tpm2.TPMAlgAES,
-						tpm2.TPMAlgCFB,
-					),
-				},
-				CurveID: tpm2.TPMECCNistP256,
-			},
-		),
-		Unique: tpm2.NewTPMUPublicID(
-			tpm2.TPMAlgECC,
-			&tpm2.TPMSECCPoint{
-				X: tpm2.TPM2BECCParameter{
-					Buffer: make([]byte, 0),
-				},
-				Y: tpm2.TPM2BECCParameter{
-					Buffer: make([]byte, 0),
-				},
-			},
-		),
-	}
 )
 
 var TPMDEVICES = []string{"/dev/tpm0", "/dev/tpmrm0"}
@@ -111,7 +69,7 @@ func main() {
 
 	primaryKey, err := tpm2.CreatePrimary{
 		PrimaryHandle: tpm2.TPMRHOwner,
-		InPublic:      tpm2.New2B(ECCSRKHTemplate),
+		InPublic:      tpm2.New2B(keyfile.ECCSRK_H2_Template),
 	}.Execute(rwr)
 	if err != nil {
 		fmt.Printf("error: can't create primary %q: %v\n", *tpmPath, err)
@@ -186,6 +144,7 @@ func main() {
 	}.Execute(rwr)
 	if err != nil {
 		fmt.Printf("can't import hmac %v", err)
+		os.Exit(0)
 	}
 
 	hmacKey, err := tpm2.Load{
@@ -231,12 +190,14 @@ func main() {
 	}
 
 	// write to PEM file
-	tkf, err := keyfile.NewLoadableKey(tpm2.New2B(hmacTemplate), importResponse.OutPrivate, primaryKey.ObjectHandle, false)
-	if err != nil {
-		fmt.Printf("failed to load hmacKey: %v\n", err)
-		return
+	//tkf, err := keyfile.NewLoadableKey(tpm2.New2B(hmacTemplate), importResponse.OutPrivate, primaryKey.ObjectHandle, false)
+	tkf := &keyfile.TPMKey{
+		Keytype:   keyfile.OIDLoadableKey,
+		EmptyAuth: true,
+		Parent:    primaryKey.ObjectHandle,
+		Pubkey:    tpm2.New2B(hmacTemplate),
+		Privkey:   importResponse.OutPrivate,
 	}
-
 	b := new(bytes.Buffer)
 	err = keyfile.Encode(b, tkf)
 	if err != nil {

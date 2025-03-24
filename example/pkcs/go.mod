@@ -21,8 +21,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.20.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.3 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
-	github.com/salrashid123/aws_hmac/pkcs v0.0.0-20240603121259-f254d7e77c0c // indirect
-	github.com/salrashid123/aws_hmac/pkcs/signer v0.0.0-20240603113244-90c0fa02c6a3 // indirect
-	github.com/salrashid123/aws_hmac/pkcs/signer/v4 v4.0.0-20240603113244-90c0fa02c6a3 // indirect
-	github.com/salrashid123/aws_hmac/stsschema v0.0.0-20240603113244-90c0fa02c6a3 // indirect
+	github.com/salrashid123/aws_hmac/pkcs v0.0.0
+	github.com/salrashid123/aws_hmac/stsschema v0.0.0
+)
+
+replace (
+	github.com/salrashid123/aws_hmac/pkcs => ../../pkcs
+	github.com/salrashid123/aws_hmac/stsschema => ../../stsschema
 )

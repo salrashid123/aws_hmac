@@ -48,48 +48,6 @@ var (
 	persistentHandle = flag.Uint("persistentHandle", 0x81008001, "Handle value")
 
 	in = flag.String("in", "private.pem", "privateKey File")
-
-	ECCSRKHTemplate = tpm2.TPMTPublic{
-		Type:    tpm2.TPMAlgECC,
-		NameAlg: tpm2.TPMAlgSHA256,
-		ObjectAttributes: tpm2.TPMAObject{
-			FixedTPM:            true,
-			FixedParent:         true,
-			SensitiveDataOrigin: true,
-			UserWithAuth:        true,
-			NoDA:                true,
-			Restricted:          true,
-			Decrypt:             true,
-		},
-		Parameters: tpm2.NewTPMUPublicParms(
-			tpm2.TPMAlgECC,
-			&tpm2.TPMSECCParms{
-				Symmetric: tpm2.TPMTSymDefObject{
-					Algorithm: tpm2.TPMAlgAES,
-					KeyBits: tpm2.NewTPMUSymKeyBits(
-						tpm2.TPMAlgAES,
-						tpm2.TPMKeyBits(128),
-					),
-					Mode: tpm2.NewTPMUSymMode(
-						tpm2.TPMAlgAES,
-						tpm2.TPMAlgCFB,
-					),
-				},
-				CurveID: tpm2.TPMECCNistP256,
-			},
-		),
-		Unique: tpm2.NewTPMUPublicID(
-			tpm2.TPMAlgECC,
-			&tpm2.TPMSECCPoint{
-				X: tpm2.TPM2BECCParameter{
-					Buffer: make([]byte, 0),
-				},
-				Y: tpm2.TPM2BECCParameter{
-					Buffer: make([]byte, 0),
-				},
-			},
-		),
-	}
 )
 
 var TPMDEVICES = []string{"/dev/tpm0", "/dev/tpmrm0"}
@@ -125,7 +83,7 @@ func main() {
 
 	primaryKey, err := tpm2.CreatePrimary{
 		PrimaryHandle: tpm2.TPMRHOwner,
-		InPublic:      tpm2.New2B(ECCSRKHTemplate),
+		InPublic:      tpm2.New2B(keyfile.ECCSRK_H2_Template),
 	}.Execute(rwr)
 	if err != nil {
 		fmt.Printf("can't create primary %q: %v\n", *tpmPath, err)
@@ -339,11 +297,6 @@ func main() {
 
 	fmt.Println("-------------------------------- GetCallerIdentity with SessionToken SDK")
 
-	// sess, err := session.NewSession(&aws.Config{
-	// 	Region:      *awsRegion,
-	// 	Credentials: sessionCredentials,
-	// })
-
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(*awsRegion), config.WithCredentialsProvider(sessionCredentials))
 	if err != nil {
 		fmt.Printf("Could not read GetCallerIdentity response %v", err)
@@ -359,6 +312,7 @@ func main() {
 		fmt.Printf("Could not read GetCallerIdentity response %v\n", err)
 		return
 	}
+	fmt.Printf("STS Identity from ARN %s\n", *stsresp.Arn)
 	fmt.Printf("STS Identity from API %s\n", *stsresp.UserId)
 
 	fmt.Println("-------------------------------- GetCallerIdentity with AssumeRole SDK")
@@ -378,4 +332,5 @@ func main() {
 		return
 	}
 	fmt.Printf("Assumed role ARN: %s\n", *stsresp2.Arn)
+	fmt.Printf("STS Identity: %s\n", *stsresp2.UserId)
 }

@@ -40,8 +40,8 @@ tpm2 import -C primary.ctx -G hmac -i hmac.key -u hmac.pub -r hmac.priv
 tpm2_flushcontext -t
 tpm2 load -C primary.ctx -u hmac.pub -r hmac.priv -c hmac.ctx
 
-### optionally export the key to PEM
-# tpm2tss-genkey -u hmac.pub -r hmac.priv private.pem
+## encode as PEM
+tpm2_encodeobject -C primary.ctx -u hmac.pub -r hmac.priv  -o private.pem
 
 # evict it to handle 0x81008001
 tpm2_evictcontrol -C o -c hmac.ctx 0x81008001 
@@ -81,15 +81,15 @@ xr9pHcM=
 Now the key is setup on the TPM, we can use it to issue credentials:
 
 ```bash
-$ go run load/main.go --tpm-path="127.0.0.1:2321" \
-   --accessKeyID=$AWS_ACCESS_KEY_ID -in private.pem --roleARN="arn:aws:iam::291738886548:role/gcpsts"
+$ go run load/main.go --tpm-path="127.0.0.1:2321"    --accessKeyID=$AWS_ACCESS_KEY_ID -in /tmp/private.pem --roleARN=$AWS_ROLE_ARN
 
 -------------------------------- Calling HTTP POST on  GetCallerIdentity using TPM Signer
-GetCallerIdentityResponse UserID AIDAUH3H6EGKDO36JYJH3
+GetCallerIdentityResponse UserID AIDAUH3H6EGKJS3TUUUSY
 -------------------------------- GetCallerIdentity with SessionToken SDK
-STS Identity from API AIDAUH3H6EGKDO36JYJH3
+STS Identity from ARN arn:aws:iam::291738886548:user/testservice
+STS Identity from API AIDAUH3H6EGKJS3TUUUSY
 -------------------------------- GetCallerIdentity with AssumeRole SDK
-Assumed role ARN: arn:aws:sts::291738886548:assumed-role/gcpsts/mysession
+Assumed role ARN: arn:aws:sts::291738886548:assumed-role/cicdrole/mysession
 ```
 
 What the two script above does is 
@@ -109,14 +109,14 @@ After the key is embedded to the persistent handle, you can reuse that between r
 ## to read the persistent handle of the key:
 $ tpm2_readpublic -c 0x81008001
 
-name: 000bc83e890cb65b375cf7ee03ff8a926d05c83b29638f16de3259223f4d75c3e64b
-qualified name: 000bae586ba9e43eef2d032ef23a4df619415b01a7ec39692fb7e59fc16133b425fc
+name: 000bc8aec7b8022771083c4fb6779ddb55dc29bb59d434233d928c195427176a8b1b
+qualified name: 000b1a795c6cfe87728cc81e35dbfe1c77c6a47499cc6c650c836587da610c842913
 name-alg:
   value: sha256
   raw: 0xb
 attributes:
-  value: fixedtpm|fixedparent|userwithauth|sign
-  raw: 0x40052
+  value: userwithauth|sign
+  raw: 0x40040
 type:
   value: keyedhash
   raw: 0x8
@@ -126,18 +126,18 @@ algorithm:
 hash-alg:
   value: sha256
   raw: 0xb
-keyedhash: 1b1d2a63ab2367b3ad827a1942dae1ca217bfd714fee05f6886162f8a5314349
+keyedhash: 53627dea456e7a94594b4e49be22a44c12272d45e3d2f0a2adf20c566ceb6d92
 
 ## to read the PEM format of the key:
 
 $ cat private.pem 
 -----BEGIN TSS2 PRIVATE KEY-----
-MIHyBgZngQUKAQMCBQCAAAAABDIAMAAIAAsABABSAAAABQALACARtTINyP8V6vtY
-+rQgUZGuCdIC2M5nKogtjdpCuy0bRQSBrACqACCvE1r0clA9W8id4FJ/2OEKPZrC
-wqFqkwFm1/l67eVQfwAQ+b5BGhOLbO0HSlHbFC1lgAh9EeefG97VL6iSh1EHT2oo
-KSxrKjuK/EruAQxaOS9Kl/yooai6TJtlgxA7GHGzqetCpXvcq5EtJBVwV3lXJyil
-4CPyaPh3C02I9J+2QAnLsVzlPYODcjRKEUqMlO6CDijxURnU5BdYUehpZaq11tJv
-xr9pHcM=
+MIH3BgZngQUKAQOgAwEB/wIFAIAAAAAEMgAwAAgACwAEAEAAAAAFAAsAIDdNY1TO
++cDEnS5teIu6W5zBkn3gu3a7hDUJCtWmklNxBIGsAKoAIAXDM2cgiYMKPTdKhmFn
+7hi4/yJEGK2dEm2zxcgAm/XiABCsRiDFuzWlPUIr1pkLFx7Kr3RRmRKCaQK5bpa8
+0dCxjL2WbPtCMTMr2mrzIrjZZURYTlanCmU2OMUmjZ9o7qvKAuVHi9zjRfJ5WN52
+p/COQgdyNbLObKw0J5FvUeEpxEczRme/9VtlKRqNG3TGb+CGbyCxcy6mLAylMXuV
+/CRDoQLEHPOcDg==
 -----END TSS2 PRIVATE KEY-----
 
 ```
@@ -355,3 +355,16 @@ whcih means the traffic to get the key isn't encrypted though...its just expecte
 Anyway, once its acquired, you can pass the encryption key key and name to this library
 
 ![images/session.png](images/session.png)
+
+
+### SoftwareTPM
+
+If you want to use a software tpm to test
+
+```bash
+rm -rf /tmp/myvtpm && mkdir /tmp/myvtpm  && \
+   sudo swtpm_setup --tpmstate /tmp/myvtpm --tpm2 --create-ek-cert && \
+   sudo swtpm socket --tpmstate dir=/tmp/myvtpm --tpm2 --server type=tcp,port=2321 --ctrl type=tcp,port=2322 --flags not-need-init,startup-clear --log level=5
+
+export TPM2TOOLS_TCTI="swtpm:port=2321"
+```

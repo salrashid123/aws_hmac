@@ -16,6 +16,7 @@ import (
 
 	"flag"
 
+	keyfile "github.com/foxboron/go-tpm-keyfiles"
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpm2/transport"
@@ -84,8 +85,8 @@ func main() {
 	// and use this for session encryption (eg, encrypting traffic on the hardware cpu<->tpm bus)
 	//  this step is optional but recommended, In the following example, i'm using the EK
 	createEKCmd := tpm2.CreatePrimary{
-		PrimaryHandle: tpm2.TPMRHEndorsement,
-		InPublic:      tpm2.New2B(tpm2.RSAEKTemplate),
+		PrimaryHandle: tpm2.TPMRHOwner,
+		InPublic:      tpm2.New2B(keyfile.ECCSRK_H2_Template),
 	}
 	createEKRsp, err := createEKCmd.Execute(rwr)
 	if err != nil {
