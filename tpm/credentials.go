@@ -35,10 +35,10 @@ const (
 var ()
 
 type TPMProvider struct {
-	AssumeRoleInput      *sts.AssumeRoleInput
-	TPMSigner            *hmacsigner.TPMSigner
-	GetSessionTokenInput *sts.GetSessionTokenInput
-	Version              string
+	AssumeRoleInput      *sts.AssumeRoleInput      // sts.AssumeRoleInput structure
+	TPMSigner            *hmacsigner.TPMSigner     // TPMSigner from github.com/salrashid123/aws_hmac/tpm/signer
+	GetSessionTokenInput *sts.GetSessionTokenInput // sts.SessionTokenInput structure
+	Version              string                    // default: "2011-06-15",
 	Region               string
 }
 
@@ -51,6 +51,9 @@ type TPMCredentialsProvider struct {
 	expiration           time.Time
 }
 
+// NewAWSTPMCredentials create AWS TPM based HMAC authentictaion credentials.
+//
+//	the root HMAC key is sealed inside a Trusted Platform Module (TPM)
 func NewAWSTPMCredentials(cfg TPMProvider) (*TPMCredentialsProvider, error) {
 	if cfg.AssumeRoleInput == nil && cfg.GetSessionTokenInput == nil {
 		return &TPMCredentialsProvider{}, errors.New("error either AssumeRoleInput or GetSessionTokenInput must be set")

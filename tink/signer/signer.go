@@ -1,6 +1,4 @@
-// Copyright 2020 Google LLC.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// Attribution: https://github.com/aws/aws-sdk-go-v2/blob/main/aws/signer
 
 package signer
 

@@ -34,13 +34,12 @@ const (
 var ()
 
 type PKCSProvider struct {
-	AssumeRoleInput      *sts.AssumeRoleInput
+	AssumeRoleInput      *sts.AssumeRoleInput // sts.AssumeRoleInput structure
 	PKCSSigner           *hmacsigner.PKCSSigner
-	GetSessionTokenInput *sts.GetSessionTokenInput
-
-	Version    string
-	Region     string
-	expiration time.Time
+	GetSessionTokenInput *sts.GetSessionTokenInput // sts.SessionTokenInput structure
+	Version              string                    // default: "2011-06-15",
+	Region               string
+	expiration           time.Time
 }
 
 type PKCSCredentialsProvider struct {

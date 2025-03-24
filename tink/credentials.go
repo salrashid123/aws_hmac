@@ -32,10 +32,10 @@ const (
 var ()
 
 type TINKProvider struct {
-	AssumeRoleInput      *sts.AssumeRoleInput
-	TinkSigner           *hmacsigner.TinkSigner
-	GetSessionTokenInput *sts.GetSessionTokenInput
-	Version              string
+	AssumeRoleInput      *sts.AssumeRoleInput      // sts.AssumeRoleInput structure
+	TinkSigner           *hmacsigner.TinkSigner    // TINKSigner from github.com/salrashid123/aws_hmac/tink/signer
+	GetSessionTokenInput *sts.GetSessionTokenInput // sts.SessionTokenInput structure
+	Version              string                    // default: "2011-06-15",
 	Region               string
 	expiration           time.Time
 }

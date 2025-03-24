@@ -1,5 +1,4 @@
-// Attribution:
-// https://github.com/aws/aws-sdk-go-v2/blob/main/aws/signer/v4/v4.go
+// Attribution: https://github.com/aws/aws-sdk-go-v2/blob/main/aws/signer/v4/v4.go
 package v4
 
 import (

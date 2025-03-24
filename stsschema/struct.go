@@ -1,3 +1,4 @@
+// aws sts helper schema used to unmarshall XML responses
 package stsschema
 
 import "time"

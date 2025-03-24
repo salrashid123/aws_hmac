@@ -1,7 +1,3 @@
-// Copyright 2020 Google LLC.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package signer
 
 import (
@@ -15,11 +11,11 @@ import (
 )
 
 type TPMConfig struct {
-	TPMDevice        io.ReadWriteCloser
-	NamedHandle      tpm2.NamedHandle
-	AuthSession      Session          // If the key needs a session, supply one as the `tpmjwt.Session`
-	EncryptionHandle tpm2.TPMHandle   // (optional) handle to use for transit encryption
-	EncryptionPub    *tpm2.TPMTPublic // (optional) public key to use for transit encryption
+	TPMDevice        io.ReadWriteCloser // TPM ReadCloser
+	NamedHandle      tpm2.NamedHandle   // tpm2NameHandle
+	AuthSession      Session            // If the key needs a session, supply one as the `tpmjwt.Session`
+	EncryptionHandle tpm2.TPMHandle     // (optional) handle to use for transit encryption
+	EncryptionPub    *tpm2.TPMTPublic   // (optional) public key to use for transit encryption
 }
 
 type TPMSignerConfig struct {
