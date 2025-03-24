@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 env:
   AWS_REGION : us-east-1
   AWS_ROLE_SESSION_NAME: mysession
