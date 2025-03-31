@@ -155,7 +155,7 @@ func TestSessionToken(t *testing.T) {
 
 	rwr := transport.FromReadWriter(tpmDevice)
 
-	hmacKey, pub, closer, err := loadKey(rwr)
+	hmacKey, _, closer, err := loadKey(rwr)
 	require.NoError(t, err)
 	defer closer()
 
@@ -166,10 +166,7 @@ func TestSessionToken(t *testing.T) {
 	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
 		TPMConfig: hmacsigner.TPMConfig{
 			TPMDevice: tpmDevice,
-			NamedHandle: tpm2.NamedHandle{
-				Handle: hmacKey,
-				Name:   pub,
-			},
+			Handle:    hmacKey,
 		},
 		AccessKeyID: awsKey,
 	})
@@ -206,7 +203,7 @@ func TestAssumeRole(t *testing.T) {
 
 	rwr := transport.FromReadWriter(tpmDevice)
 
-	hmacKey, pub, closer, err := loadKey(rwr)
+	hmacKey, _, closer, err := loadKey(rwr)
 	require.NoError(t, err)
 	defer closer()
 
@@ -219,10 +216,7 @@ func TestAssumeRole(t *testing.T) {
 	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
 		TPMConfig: hmacsigner.TPMConfig{
 			TPMDevice: tpmDevice,
-			NamedHandle: tpm2.NamedHandle{
-				Handle: hmacKey,
-				Name:   pub,
-			},
+			Handle:    hmacKey,
 		},
 		AccessKeyID: awsKey,
 	})
@@ -242,6 +236,68 @@ func TestAssumeRole(t *testing.T) {
 
 	ctx := context.Background()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion), config.WithCredentialsProvider(assumeRoleCredentials))
+	require.NoError(t, err)
+
+	stssvc := sts.NewFromConfig(cfg, func(o *sts.Options) {
+		o.Region = awsRegion
+	})
+
+	stsresp, err := stssvc.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	require.NoError(t, err)
+
+	require.Equal(t, testAccountArn, aws.ToString(stsresp.Arn))
+}
+
+func TestEncryption(t *testing.T) {
+	tpmDevice, err := simulator.Get()
+	require.NoError(t, err)
+	defer tpmDevice.Close()
+
+	rwr := transport.FromReadWriter(tpmDevice)
+
+	createEKCmd := tpm2.CreatePrimary{
+		PrimaryHandle: tpm2.TPMRHEndorsement,
+		InPublic:      tpm2.New2B(tpm2.RSAEKTemplate),
+	}
+	createEKRsp, err := createEKCmd.Execute(rwr)
+	require.NoError(t, err)
+	defer func() {
+		flushContextCmd := tpm2.FlushContext{
+			FlushHandle: createEKRsp.ObjectHandle,
+		}
+		_, _ = flushContextCmd.Execute(rwr)
+	}()
+
+	hmacKey, _, closer, err := loadKey(rwr)
+	require.NoError(t, err)
+	defer closer()
+
+	awsKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	testAccountArn := os.Getenv("AWS_ACCOUNT_ARN")
+	awsRegion := os.Getenv("AWS_DEFAULT_REGION")
+
+	tpmSigner, err := hmacsigner.NewTPMSigner(&hmacsigner.TPMSignerConfig{
+		TPMConfig: hmacsigner.TPMConfig{
+			TPMDevice:        tpmDevice,
+			Handle:           hmacKey,
+			EncryptionHandle: createEKRsp.ObjectHandle,
+		},
+		AccessKeyID: awsKey,
+	})
+	require.NoError(t, err)
+
+	stscreds, err := NewAWSTPMCredentials(TPMProvider{
+		GetSessionTokenInput: &sts.GetSessionTokenInput{
+			DurationSeconds: aws.Int32(3600),
+		},
+		Version:   "2011-06-15",
+		Region:    awsRegion,
+		TPMSigner: tpmSigner,
+	})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion), config.WithCredentialsProvider(stscreds))
 	require.NoError(t, err)
 
 	stssvc := sts.NewFromConfig(cfg, func(o *sts.Options) {

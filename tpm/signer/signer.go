@@ -1,6 +1,7 @@
 package signer
 
 import (
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -12,10 +13,9 @@ import (
 
 type TPMConfig struct {
 	TPMDevice        io.ReadWriteCloser // TPM ReadCloser
-	NamedHandle      tpm2.NamedHandle   // tpm2NameHandle
+	Handle           tpm2.TPMHandle     // TPMHandle for the hmac key
 	AuthSession      Session            // If the key needs a session, supply one as the `tpmjwt.Session`
 	EncryptionHandle tpm2.TPMHandle     // (optional) handle to use for transit encryption
-	EncryptionPub    *tpm2.TPMTPublic   // (optional) public key to use for transit encryption
 }
 
 type TPMSignerConfig struct {
@@ -30,7 +30,6 @@ type TPMSigner struct {
 	AccessKeyID      string
 	SessionToken     string
 	encryptionHandle tpm2.TPMHandle
-	encryptionPub    *tpm2.TPMTPublic
 }
 
 const (
@@ -50,7 +49,6 @@ func NewTPMSigner(cfg *TPMSignerConfig) (*TPMSigner, error) {
 		AccessKeyID:      cfg.AccessKeyID,
 		SessionToken:     cfg.SessionToken,
 		encryptionHandle: cfg.TPMConfig.EncryptionHandle,
-		encryptionPub:    cfg.TPMConfig.EncryptionPub,
 	}, nil
 }
 
@@ -73,17 +71,45 @@ func (ts *TPMSigner) MAC(msg []byte) ([]byte, error) {
 	} else {
 		se = tpm2.PasswordAuth(nil)
 	}
+	pss := make([]byte, 32)
+	_, err := rand.Read(pss)
+	if err != nil {
+		return nil, fmt.Errorf("tpmjwt: failed to generate random for hash %v", err)
+	}
 
-	objAuth := &tpm2.TPM2BAuth{}
+	objAuth := &tpm2.TPM2BAuth{
+		Buffer: pss,
+	}
 
-	return ts.hmac(rwr, msg, ts.TPMConfig.NamedHandle, *objAuth, se)
+	pub, err := tpm2.ReadPublic{
+		ObjectHandle: ts.TPMConfig.Handle,
+	}.Execute(rwr)
+	if err != nil {
+		return nil, fmt.Errorf("aws_hmac: error getting public %v", err)
+	}
+
+	nh := tpm2.NamedHandle{
+		Handle: ts.TPMConfig.Handle,
+		Name:   pub.Name,
+	}
+	return ts.hmac(rwr, msg, nh, *objAuth, se)
 }
 
 func (ts *TPMSigner) hmac(rwr transport.TPM, data []byte, objNamedHandle tpm2.NamedHandle, objAuth tpm2.TPM2BAuth, sess tpm2.Session) ([]byte, error) {
 
 	var rsess tpm2.Session
-	if ts.encryptionHandle != 0 && ts.encryptionPub != nil {
-		rsess = tpm2.HMAC(tpm2.TPMAlgSHA256, 16, tpm2.AESEncryption(128, tpm2.EncryptIn), tpm2.Salted(ts.encryptionHandle, *ts.encryptionPub))
+	if ts.encryptionHandle != 0 {
+		encryptionPub, err := tpm2.ReadPublic{
+			ObjectHandle: ts.encryptionHandle,
+		}.Execute(rwr)
+		if err != nil {
+			return nil, err
+		}
+		ePubName, err := encryptionPub.OutPublic.Contents()
+		if err != nil {
+			return nil, err
+		}
+		rsess = tpm2.HMAC(tpm2.TPMAlgSHA256, 16, tpm2.AESEncryption(128, tpm2.EncryptIn), tpm2.Salted(ts.encryptionHandle, *ePubName))
 	} else {
 		rsess = tpm2.HMAC(tpm2.TPMAlgSHA256, 16, tpm2.AESEncryption(128, tpm2.EncryptIn))
 	}
