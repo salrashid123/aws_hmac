@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"io"
+	"net"
 	"os"
 	"testing"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	keyfile "github.com/foxboron/go-tpm-keyfiles"
-	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpm2/transport"
 
@@ -22,6 +22,10 @@ import (
 )
 
 var ()
+
+const (
+	swTPMPath = "127.0.0.1:2321"
+)
 
 func loadKey(rwr transport.TPM) (tpm2.TPMHandle, tpm2.TPM2BName, func(), error) {
 
@@ -149,7 +153,7 @@ func loadKey(rwr transport.TPM) (tpm2.TPMHandle, tpm2.TPM2BName, func(), error) 
 	return hmacKey.ObjectHandle, pub.Name, closer, nil
 }
 func TestSessionToken(t *testing.T) {
-	tpmDevice, err := simulator.Get()
+	tpmDevice, err := net.Dial("tcp", swTPMPath)
 	require.NoError(t, err)
 	defer tpmDevice.Close()
 
@@ -197,7 +201,7 @@ func TestSessionToken(t *testing.T) {
 }
 
 func TestAssumeRole(t *testing.T) {
-	tpmDevice, err := simulator.Get()
+	tpmDevice, err := net.Dial("tcp", swTPMPath)
 	require.NoError(t, err)
 	defer tpmDevice.Close()
 
@@ -249,7 +253,7 @@ func TestAssumeRole(t *testing.T) {
 }
 
 func TestEncryption(t *testing.T) {
-	tpmDevice, err := simulator.Get()
+	tpmDevice, err := net.Dial("tcp", swTPMPath)
 	require.NoError(t, err)
 	defer tpmDevice.Close()
 
