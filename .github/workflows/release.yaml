@@ -5,11 +5,13 @@ on:
     tags:
       - '*'
 
+env:
+  AWS_REGION : us-east-1
+  AWS_ROLE_SESSION_NAME: mysession
+
 permissions:
-  contents: write # needed to write releases
-  id-token: write # needed for keyless signing
-  packages: write # needed for ghcr access
-  attestations: write # needed for provenance
+      id-token: write
+      contents: read
 
 jobs:
   test:
