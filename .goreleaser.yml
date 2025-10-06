@@ -23,7 +23,7 @@ archives:
 snapshot:
   version_template: '{{ .Version }}'
 checksum:
-  name_template: '{{ .ProjectName }}_checksums.txt'
+  name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
   algorithm: sha256
 dist: dist
 signs:
@@ -42,6 +42,7 @@ signs:
 env_files:
   github_token: ~/.config/goreleaser/github_token
 source:
+  enabled: false
   name_template: '{{ .ProjectName }}-{{ .Version }}'
   format: tar.gz
 github_urls:
