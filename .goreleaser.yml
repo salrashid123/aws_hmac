@@ -1,10 +1,10 @@
-project_name: github.com/salrashid123/aws_hmac
+project_name: aws_hmac
 version: 2
 release:
   draft: true
   github:
     owner: salrashid123
-    name: github.com/salrashid123
+    name: aws_hmac
   name_template: '{{.Tag}}'
   extra_files:
 gomod:
